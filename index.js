@@ -1,6 +1,7 @@
 import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
+import { getFaqReply } from "./knowledge.js";
 
 dotenv.config();
 
@@ -12,7 +13,7 @@ const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const PORT = process.env.PORT || 3000;
 
-// very simple in-memory language store for testing
+// simple in-memory language store
 const userLanguage = {};
 
 app.get("/", (req, res) => {
@@ -52,7 +53,7 @@ async function sendWhatsAppMessage(to, body) {
 function getLanguageMenu() {
   return (
     "Welcome to Laki Hotel & Spa 🏨\n\n" +
-    "Please choose your language:\n" +
+    "Please choose your language / Ве молиме изберете јазик:\n" +
     "1. English\n" +
     "2. Македонски"
   );
@@ -65,7 +66,8 @@ function getEnglishMenu() {
     "1. Prices\n" +
     "2. Spa information\n" +
     "3. Parking\n" +
-    "4. Contact"
+    "4. Contact\n\n" +
+    "You can also type your question directly."
   );
 }
 
@@ -76,7 +78,8 @@ function getMacedonianMenu() {
     "1. Цени\n" +
     "2. СПА информации\n" +
     "3. Паркинг\n" +
-    "4. Контакт"
+    "4. Контакт\n\n" +
+    "Или напишете прашање директно."
   );
 }
 
@@ -94,51 +97,97 @@ app.post("/webhook", async (req, res) => {
     const from = message.from;
     const text = (message.text?.body || "").trim().toLowerCase();
 
+    if (!text) {
+      return res.sendStatus(200);
+    }
+
     let reply = "";
+    const currentLanguage = userLanguage[from] || null;
 
-    // language selection
-    if (text === "1" || text === "english") {
-      userLanguage[from] = "en";
-      reply = getEnglishMenu();
-    } else if (text === "2" || text === "македонски" || text === "mk") {
-      userLanguage[from] = "mk";
-      reply = getMacedonianMenu();
-    } else {
-      const lang = userLanguage[from];
-
-      if (!lang) {
+    // 1. FIRST CONTACT -> always language selection
+    if (!currentLanguage) {
+      if (text === "1" || text === "english") {
+        userLanguage[from] = "en";
+        reply = getEnglishMenu();
+      } else if (text === "2" || text === "македонски" || text === "mk") {
+        userLanguage[from] = "mk";
+        reply = getMacedonianMenu();
+      } else {
         reply = getLanguageMenu();
-      } else if (lang === "en") {
-        if (text.includes("price") || text === "prices") {
-          reply =
-            "For the best offer, please contact us at contact@lakihotelspa.com or call +389 46 203 333.";
-        } else if (text.includes("spa") || text === "2") {
-          reply =
-            "Spa is included in the price. When there is high occupancy, spa use may be limited to 2 hours so all guests can enjoy it. Our indoor saltwater pool is open from 11:00 to 21:00.";
-        } else if (text.includes("parking") || text === "3") {
-          reply = "Parking is outdoor and free of charge.";
-        } else if (text.includes("contact") || text === "4") {
-          reply =
-            "You can contact us at contact@lakihotelspa.com or call +389 46 203 333.";
-        } else {
-          reply = getEnglishMenu();
-        }
-      } else if (lang === "mk") {
-        if (text.includes("цена") || text === "цени") {
-          reply =
-            "За најдобра понуда, ве молиме пишете ни на contact@lakihotelspa.com или јавете се на +389 46 203 333.";
-        } else if (text.includes("спа") || text === "2") {
-          reply =
-            "СПА е вклучено во цената. Кога има поголема гужва, користењето може да биде ограничено на 2 часа за сите гости да можат да уживаат. Внатрешниот базен со солена вода работи од 11:00 до 21:00.";
-        } else if (text.includes("паркинг") || text === "3") {
-          reply = "Паркингот е надворешен и бесплатен.";
-        } else if (text.includes("контакт") || text === "4") {
-          reply =
-            "Можете да не контактирате на contact@lakihotelspa.com или на +389 46 203 333.";
-        } else {
-          reply = getMacedonianMenu();
-        }
       }
+
+      await sendWhatsAppMessage(from, reply);
+      return res.sendStatus(200);
+    }
+
+    // 2. MENU HANDLING
+    if (currentLanguage === "en") {
+      if (text === "1") {
+        const faqReply = getFaqReply("prices", "en");
+        reply = faqReply?.text || "For prices and availability, please contact us at contact@lakihotelspa.com or call +389 46 203 333.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (text === "2") {
+        const faqReply = getFaqReply("spa", "en");
+        reply = faqReply?.text || "Spa information is available directly from the hotel.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (text === "3") {
+        const faqReply = getFaqReply("parking", "en");
+        reply = faqReply?.text || "Parking information is available directly from the hotel.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (text === "4") {
+        const faqReply = getFaqReply("contact", "en");
+        reply = faqReply?.text || "You can contact us at contact@lakihotelspa.com or call +389 46 203 333.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+    }
+
+    if (currentLanguage === "mk") {
+      if (text === "1") {
+        const faqReply = getFaqReply("цени", "mk");
+        reply = faqReply?.text || "За цени и достапност, ве молиме контактирајте не на contact@lakihotelspa.com или на +389 46 203 333.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (text === "2") {
+        const faqReply = getFaqReply("спа", "mk");
+        reply = faqReply?.text || "Информации за СПА се достапни директно од хотелот.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (text === "3") {
+        const faqReply = getFaqReply("паркинг", "mk");
+        reply = faqReply?.text || "Информации за паркинг се достапни директно од хотелот.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (text === "4") {
+        const faqReply = getFaqReply("контакт", "mk");
+        reply = faqReply?.text || "Можете да не контактирате на contact@lakihotelspa.com или на +389 46 203 333.";
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+    }
+
+    // 3. FREE TEXT FAQ
+    const faqReply = getFaqReply(text, currentLanguage);
+
+    if (faqReply) {
+      reply = faqReply.text;
+    } else {
+      reply = currentLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
     }
 
     await sendWhatsAppMessage(from, reply);
