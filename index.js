@@ -2,6 +2,7 @@ import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
 import { getFaqReply } from "./knowledge.js";
+import { sendInquiryEmail } from "./mailer.js";
 
 dotenv.config();
 
@@ -103,7 +104,7 @@ function resetInquiryFlow(from) {
   delete userInquiryState[from];
 }
 
-function handleInquiryStep(from, text) {
+async function handleInquiryStep(from, text) {
   const inquiry = userInquiryState[from];
   if (!inquiry) return null;
 
@@ -165,6 +166,27 @@ function handleInquiryStep(from, text) {
   if (inquiry.step === "email") {
     inquiry.data.email = msg;
 
+    console.log("NEW HOTEL INQUIRY:", {
+      from,
+      language,
+      ...inquiry.data,
+    });
+
+    try {
+      await sendInquiryEmail({
+        fromWhatsApp: from,
+        language,
+        checkin: inquiry.data.checkin,
+        checkout: inquiry.data.checkout,
+        adults: inquiry.data.adults,
+        children: inquiry.data.children,
+        name: inquiry.data.name,
+        email: inquiry.data.email,
+      });
+    } catch (emailError) {
+      console.error("Email send error:", emailError.message || emailError);
+    }
+
     const summaryMk =
       "Ви благодариме. Вашето барање е примено.\n\n" +
       "Check-in: " + inquiry.data.checkin + "\n" +
@@ -173,6 +195,7 @@ function handleInquiryStep(from, text) {
       "Деца: " + inquiry.data.children + "\n" +
       "Име: " + inquiry.data.name + "\n" +
       "Email: " + inquiry.data.email + "\n\n" +
+      "Вашето барање е успешно испратено и на нашиот e-mail.\n" +
       "Ќе ви испратиме понуда што е можно поскоро.\n" +
       "За дополнителни информации: contact@lakihotelspa.com / +389 46 203 333";
 
@@ -184,14 +207,9 @@ function handleInquiryStep(from, text) {
       "Children: " + inquiry.data.children + "\n" +
       "Name: " + inquiry.data.name + "\n" +
       "Email: " + inquiry.data.email + "\n\n" +
+      "Your inquiry has also been sent to our email.\n" +
       "We will send you an offer as soon as possible.\n" +
       "For additional information: contact@lakihotelspa.com / +389 46 203 333";
-
-    console.log("NEW HOTEL INQUIRY:", {
-      from,
-      language,
-      ...inquiry.data,
-    });
 
     resetInquiryFlow(from);
     return language === "mk" ? summaryMk : summaryEn;
@@ -244,14 +262,12 @@ app.post("/webhook", async (req, res) => {
     let reply = "";
     const currentLanguage = userLanguage[from] || null;
 
-    // If inquiry flow already started
     if (userInquiryState[from]) {
-      reply = handleInquiryStep(from, text);
+      reply = await handleInquiryStep(from, text);
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    // First contact -> language menu
     if (!currentLanguage) {
       if (text === "1" || text === "english") {
         userLanguage[from] = "en";
@@ -267,14 +283,12 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Start inquiry flow from menu or text
     if (shouldStartInquiryFlow(text, currentLanguage)) {
       reply = startInquiryFlow(from, currentLanguage);
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    // Menu handling English
     if (currentLanguage === "en") {
       if (text === "2") {
         const faqReply = getFaqReply("rooms", "en");
@@ -316,7 +330,6 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // Menu handling Macedonian
     if (currentLanguage === "mk") {
       if (text === "2") {
         const faqReply = getFaqReply("соби", "mk");
@@ -358,7 +371,6 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // Free text FAQ
     const faqReply = getFaqReply(text, currentLanguage);
 
     if (faqReply) {
