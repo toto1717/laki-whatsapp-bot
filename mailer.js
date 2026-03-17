@@ -24,14 +24,10 @@ export async function sendInquiryEmail(inquiry) {
     email,
   } = inquiry;
 
-  const subject =
-    language === "mk"
-      ? `Ново барање за сместување - ${name}`
-      : `New hotel inquiry - ${name}`;
+  const subject = `New hotel inquiry - ${name}`;
 
   const text =
     `New inquiry from WhatsApp bot\n\n` +
-    `Language: ${language}\n` +
     `WhatsApp: ${fromWhatsApp}\n` +
     `Check-in: ${checkin}\n` +
     `Check-out: ${checkout}\n` +
@@ -48,5 +44,5 @@ export async function sendInquiryEmail(inquiry) {
     text,
   });
 
-  console.log("Inquiry email sent successfully:", info.messageId);
+  console.log("EMAIL SENT:", info.messageId);
 }
