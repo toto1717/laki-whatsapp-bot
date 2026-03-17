@@ -14,6 +14,7 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const PORT = process.env.PORT || 3000;
 
 const userLanguage = {};
+const userInquiryState = {};
 
 app.get("/", (req, res) => {
   res.status(200).send("Laki bot is running");
@@ -86,6 +87,144 @@ function getMacedonianMenu() {
   );
 }
 
+function startInquiryFlow(from, language) {
+  userInquiryState[from] = {
+    step: "checkin",
+    language,
+    data: {},
+  };
+
+  return language === "mk"
+    ? "За да ви подготвиме понуда, ве молиме внесете check-in датум.\nПример: 10.04.2026"
+    : "To prepare an offer for you, please enter your check-in date.\nExample: 10.04.2026";
+}
+
+function resetInquiryFlow(from) {
+  delete userInquiryState[from];
+}
+
+function handleInquiryStep(from, text) {
+  const inquiry = userInquiryState[from];
+  if (!inquiry) return null;
+
+  const language = inquiry.language;
+  const msg = text.trim();
+
+  if (msg === "cancel" || msg === "stop" || msg === "откажи" || msg === "стоп") {
+    resetInquiryFlow(from);
+    return language === "mk"
+      ? "Барањето е откажано.\n\n" + getMacedonianMenu()
+      : "Inquiry cancelled.\n\n" + getEnglishMenu();
+  }
+
+  if (inquiry.step === "checkin") {
+    inquiry.data.checkin = msg;
+    inquiry.step = "checkout";
+
+    return language === "mk"
+      ? "Внесете check-out датум.\nПример: 12.04.2026"
+      : "Please enter your check-out date.\nExample: 12.04.2026";
+  }
+
+  if (inquiry.step === "checkout") {
+    inquiry.data.checkout = msg;
+    inquiry.step = "adults";
+
+    return language === "mk"
+      ? "Колку возрасни гости ќе има?"
+      : "How many adults will stay?";
+  }
+
+  if (inquiry.step === "adults") {
+    inquiry.data.adults = msg;
+    inquiry.step = "children";
+
+    return language === "mk"
+      ? "Колку деца ќе има?\nАко нема, напишете 0."
+      : "How many children will stay?\nIf none, type 0.";
+  }
+
+  if (inquiry.step === "children") {
+    inquiry.data.children = msg;
+    inquiry.step = "name";
+
+    return language === "mk"
+      ? "Ве молиме внесете го вашето име:"
+      : "Please enter your name:";
+  }
+
+  if (inquiry.step === "name") {
+    inquiry.data.name = msg;
+    inquiry.step = "email";
+
+    return language === "mk"
+      ? "Ве молиме внесете e-mail адреса:"
+      : "Please enter your email address:";
+  }
+
+  if (inquiry.step === "email") {
+    inquiry.data.email = msg;
+
+    const summaryMk =
+      "Ви благодариме. Вашето барање е примено.\n\n" +
+      "Check-in: " + inquiry.data.checkin + "\n" +
+      "Check-out: " + inquiry.data.checkout + "\n" +
+      "Возрасни: " + inquiry.data.adults + "\n" +
+      "Деца: " + inquiry.data.children + "\n" +
+      "Име: " + inquiry.data.name + "\n" +
+      "Email: " + inquiry.data.email + "\n\n" +
+      "Ќе ви испратиме понуда што е можно поскоро.\n" +
+      "За дополнителни информации: contact@lakihotelspa.com / +389 46 203 333";
+
+    const summaryEn =
+      "Thank you. Your inquiry has been received.\n\n" +
+      "Check-in: " + inquiry.data.checkin + "\n" +
+      "Check-out: " + inquiry.data.checkout + "\n" +
+      "Adults: " + inquiry.data.adults + "\n" +
+      "Children: " + inquiry.data.children + "\n" +
+      "Name: " + inquiry.data.name + "\n" +
+      "Email: " + inquiry.data.email + "\n\n" +
+      "We will send you an offer as soon as possible.\n" +
+      "For additional information: contact@lakihotelspa.com / +389 46 203 333";
+
+    console.log("NEW HOTEL INQUIRY:", {
+      from,
+      language,
+      ...inquiry.data,
+    });
+
+    resetInquiryFlow(from);
+    return language === "mk" ? summaryMk : summaryEn;
+  }
+
+  return null;
+}
+
+function shouldStartInquiryFlow(text, language) {
+  const t = text.toLowerCase();
+
+  if (language === "mk") {
+    return (
+      t === "1" ||
+      t.includes("цена") ||
+      t.includes("цени") ||
+      t.includes("понуда") ||
+      t.includes("достапност") ||
+      t.includes("резервација")
+    );
+  }
+
+  return (
+    t === "1" ||
+    t.includes("price") ||
+    t.includes("prices") ||
+    t.includes("offer") ||
+    t.includes("availability") ||
+    t.includes("booking") ||
+    t.includes("reservation")
+  );
+}
+
 app.post("/webhook", async (req, res) => {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
@@ -105,7 +244,14 @@ app.post("/webhook", async (req, res) => {
     let reply = "";
     const currentLanguage = userLanguage[from] || null;
 
-    // FIRST CONTACT -> ALWAYS LANGUAGE MENU
+    // If inquiry flow already started
+    if (userInquiryState[from]) {
+      reply = handleInquiryStep(from, text);
+      await sendWhatsAppMessage(from, reply);
+      return res.sendStatus(200);
+    }
+
+    // First contact -> language menu
     if (!currentLanguage) {
       if (text === "1" || text === "english") {
         userLanguage[from] = "en";
@@ -121,17 +267,15 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ENGLISH MENU
-    if (currentLanguage === "en") {
-      if (text === "1") {
-        const faqReply = getFaqReply("offer", "en");
-        reply =
-          faqReply?.text ||
-          "For the best accommodation offer, please send us your stay details.";
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
+    // Start inquiry flow from menu or text
+    if (shouldStartInquiryFlow(text, currentLanguage)) {
+      reply = startInquiryFlow(from, currentLanguage);
+      await sendWhatsAppMessage(from, reply);
+      return res.sendStatus(200);
+    }
 
+    // Menu handling English
+    if (currentLanguage === "en") {
       if (text === "2") {
         const faqReply = getFaqReply("rooms", "en");
         reply =
@@ -172,17 +316,8 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // MACEDONIAN MENU
+    // Menu handling Macedonian
     if (currentLanguage === "mk") {
-      if (text === "1") {
-        const faqReply = getFaqReply("понуда", "mk");
-        reply =
-          faqReply?.text ||
-          "За најдобра понуда за сместување, испратете ни ги деталите за престојот.";
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
       if (text === "2") {
         const faqReply = getFaqReply("соби", "mk");
         reply =
@@ -223,11 +358,15 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // FREE TEXT FAQ
+    // Free text FAQ
     const faqReply = getFaqReply(text, currentLanguage);
 
     if (faqReply) {
-      reply = faqReply.text;
+      if (faqReply.triggersInquiryFlow) {
+        reply = startInquiryFlow(from, currentLanguage);
+      } else {
+        reply = faqReply.text;
+      }
     } else {
       reply = currentLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
     }
