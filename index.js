@@ -3,6 +3,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 import { getFaqReply, hotelKnowledge } from "./knowledge.js";
 import { getAiReply } from "./ai.js";
+import { sendInquiryEmail } from "./mailer.js";
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const PORT = process.env.PORT || 3000;
 
 const userLanguage = {};
+const userInquiryState = {};
 
 // ==========================
 // AI INTENT FUNCTION
@@ -22,33 +24,13 @@ const userLanguage = {};
 async function detectIntentWithAI(message, language) {
   try {
     const prompt = `
-You are an AI assistant for a hotel.
-
-Classify the user message into:
-
-intents:
-- spa
-- restaurant
-- parking
-- location
-- contact
-- rooms
-- offer
-- checkin_checkout
-- children_policy
-- baby_crib
-- unknown
-
-Also detect:
-- guestType: family | couple | none
-- needsInquiry: true if asking about price/availability/booking
+Classify this hotel message.
 
 Return ONLY JSON:
 {
-  "intent": "spa",
-  "guestType": "family",
-  "needsInquiry": false,
-  "confidence": 0.9
+  "intent": "spa | restaurant | parking | location | contact | rooms | offer | checkin_checkout | children_policy | baby_crib | unknown",
+  "guestType": "family | couple | none",
+  "needsInquiry": true/false
 }
 
 Message: "${message}"
@@ -64,7 +46,6 @@ Message: "${message}"
     return JSON.parse(clean);
 
   } catch (err) {
-    console.log("AI intent error:", err);
     return { intent: "unknown", guestType: "none", needsInquiry: false };
   }
 }
@@ -94,17 +75,21 @@ async function sendWhatsAppMessage(to, body) {
 // ==========================
 function getHumanFallback(language = "en") {
   return language === "mk"
-    ? `За точни информации контактирајте не на ${hotelKnowledge.hotel.email}`
-    : `For accurate info contact us at ${hotelKnowledge.hotel.email}`;
+    ? `Нашиот тим ќе ви помогне. Контакт: ${hotelKnowledge.hotel.email}`
+    : `Our team will assist you. Contact: ${hotelKnowledge.hotel.email}`;
 }
 
 // ==========================
-// INQUIRY START
+// START INQUIRY
 // ==========================
 function startInquiryFlow(from, language) {
+  userInquiryState[from] = {
+    step: "waiting_details",
+  };
+
   return language === "mk"
-    ? "Ве молиме испратете ни датум и број на гости за понуда."
-    : "Please send your dates and number of guests for an offer.";
+    ? "Ве молиме испратете датум и број на гости."
+    : "Please send your dates and number of guests.";
 }
 
 // ==========================
@@ -115,6 +100,13 @@ app.get("/webhook", (req, res) => {
     return res.send(req.query["hub.challenge"]);
   }
   res.sendStatus(403);
+});
+
+// ==========================
+// ROOT (optional)
+// ==========================
+app.get("/", (req, res) => {
+  res.send("Laki Bot running 🚀");
 });
 
 // ==========================
@@ -132,22 +124,55 @@ app.post("/webhook", async (req, res) => {
 
     const currentLanguage = userLanguage[from] || "en";
 
+    // ==========================
+    // INQUIRY FLOW HANDLER
+    // ==========================
+    if (userInquiryState[from]) {
+      const state = userInquiryState[from];
+
+      if (state.step === "waiting_details") {
+        state.details = rawText;
+        state.step = "waiting_name";
+
+        const reply =
+          currentLanguage === "mk"
+            ? "Ве молиме внесете го вашето име."
+            : "Please provide your name.";
+
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+
+      if (state.step === "waiting_name") {
+        state.name = rawText;
+
+        await sendInquiryEmail({
+          name: state.name,
+          details: state.details,
+          from,
+        });
+
+        delete userInquiryState[from];
+
+        const reply =
+          currentLanguage === "mk"
+            ? "Ви благодариме! Наскоро ќе добиете понуда."
+            : "Thank you! You will receive an offer shortly.";
+
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+    }
+
     let reply;
 
     // ==========================
-    // LAYER 1 — FAQ
+    // FAQ
     // ==========================
     const faqReply = getFaqReply(rawText, currentLanguage);
 
     if (faqReply) {
       reply = faqReply.text;
-
-      if (faqReply.id === "spa") {
-        reply +=
-          currentLanguage === "mk"
-            ? "\n\nМожете да го комбинирате спа искуството со престој."
-            : "\n\nYou can combine the spa experience with a stay.";
-      }
 
       if (faqReply.triggersInquiryFlow) {
         reply = startInquiryFlow(from, currentLanguage);
@@ -158,11 +183,9 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ==========================
-    // LAYER 2 — AI INTENT
+    // AI INTENT
     // ==========================
     const aiIntent = await detectIntentWithAI(rawText, currentLanguage);
-
-    console.log("AI INTENT:", aiIntent);
 
     if (aiIntent?.needsInquiry || aiIntent?.intent === "offer") {
       reply = startInquiryFlow(from, currentLanguage);
@@ -172,20 +195,14 @@ app.post("/webhook", async (req, res) => {
 
     if (aiIntent?.guestType === "family") {
       reply =
-        currentLanguage === "mk"
-          ? "За семејства препорачуваме апартман. Пратете ни датуми."
-          : "For families, we recommend an apartment. Send your dates.";
-
+        "For families we recommend an apartment. Send dates for an offer.";
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
     if (aiIntent?.guestType === "couple") {
       reply =
-        currentLanguage === "mk"
-          ? "За двајца, двокреветна соба е одличен избор."
-          : "For two persons, a double room is ideal.";
-
+        "For two persons, a double room is ideal. Send dates.";
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
@@ -196,13 +213,12 @@ app.post("/webhook", async (req, res) => {
     const faqFromIntent = getFaqReply(aiIntent?.intent, currentLanguage);
 
     if (faqFromIntent) {
-      reply = faqFromIntent.text;
-      await sendWhatsAppMessage(from, reply);
+      await sendWhatsAppMessage(from, faqFromIntent.text);
       return res.sendStatus(200);
     }
 
     // ==========================
-    // LAYER 3 — AI REPLY
+    // AI REPLY
     // ==========================
     const aiReply = await getAiReply({
       message: rawText,
@@ -231,8 +247,6 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ==========================
-// START SERVER
 // ==========================
 app.listen(PORT, () => {
   console.log("Bot running on port", PORT);
