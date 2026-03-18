@@ -236,13 +236,14 @@ app.post("/webhook", async (req, res) => {
   // ==========================
   reply = getHumanFallback(currentLanguage);
 
-  await sendWhatsAppMessage(from, reply);
-  return res.sendStatus(200);
+ await sendWhatsAppMessage(from, reply);
+return res.sendStatus(200);
 
 } catch (err) {
   console.error(err);
   return res.sendStatus(500);
-}});
+}
+});
 
 app.listen(PORT, () => {
   console.log("Bot running on port", PORT);
