@@ -11,8 +11,6 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendInquiryEmail(inquiry) {
-  console.log("EMAIL FUNCTION CALLED");
-
   const {
     fromWhatsApp,
     language,
@@ -20,21 +18,26 @@ export async function sendInquiryEmail(inquiry) {
     checkout,
     adults,
     children,
+    childrenAges,
     name,
     email,
+    specialRequest,
   } = inquiry;
 
   const subject = `New hotel inquiry - ${name}`;
 
   const text =
     `New inquiry from WhatsApp bot\n\n` +
+    `Language: ${language}\n` +
     `WhatsApp: ${fromWhatsApp}\n` +
     `Check-in: ${checkin}\n` +
     `Check-out: ${checkout}\n` +
     `Adults: ${adults}\n` +
     `Children: ${children}\n` +
+    `Children ages: ${childrenAges || "N/A"}\n` +
     `Name: ${name}\n` +
-    `Email: ${email}\n`;
+    `Email: ${email}\n` +
+    `Special request: ${specialRequest || "None"}\n`;
 
   const info = await transporter.sendMail({
     from: `"Laki Hotel Bot" <${process.env.MAIL_USER}>`,
@@ -45,4 +48,5 @@ export async function sendInquiryEmail(inquiry) {
   });
 
   console.log("EMAIL SENT:", info.messageId);
+  return info;
 }
