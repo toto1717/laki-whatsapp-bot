@@ -676,10 +676,14 @@ app.post("/webhook", async (req, res) => {
       reply = getHumanFallback(currentLanguage);
     }
 
-    await sendWhatsAppMessage(from, reply);
+        await sendWhatsAppMessage(from, reply);
     return res.sendStatus(200);
   } catch (error) {
     console.error("Webhook error:", error.response?.data || error.message || error);
     return res.sendStatus(500);
   }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
