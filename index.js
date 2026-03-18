@@ -210,7 +210,7 @@ app.post("/webhook", async (req, res) => {
     // ==========================
     // FALLBACK
     // ==========================
-    const reply = getHumanFallback(currentLanguage);
+    reply = getHumanFallback(currentLanguage);
     await sendWhatsAppMessage(from, reply);
     return res.sendStatus(200);
 
