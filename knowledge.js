@@ -200,7 +200,43 @@ const hotelKnowledge = {
         "Email: contact@lakihotelspa.com\n" +
         "Телефон: +389 46 203 333",
     },
+{
+  id: "internal_phone",
 
+  keywordsEn: [
+    "phone",
+    "internal",
+    "call",
+    "reception",
+    "number"
+  ],
+
+  keywordsMk: [
+    "телефон",
+    "внатрешен",
+    "број",
+    "рецепција",
+    "како да се јавам"
+  ],
+
+  textEn:
+    "📞 Internal phone numbers (from your room):\n\n" +
+    "0 – Reception\n" +
+    "501 – Restaurant\n" +
+    "502 – Spa\n" +
+    "503 – Pool\n" +
+    "504 – Kitchen\n\n" +
+    "All numbers are available via the phone in your room.",
+
+  textMk:
+    "📞 Внатрешни телефонски броеви (од соба):\n\n" +
+    "0 – Рецепција\n" +
+    "501 – Ресторан\n" +
+    "502 – СПА\n" +
+    "503 – Базен\n" +
+    "504 – Кујна\n\n" +
+    "Сите броеви се достапни преку телефонот во вашата соба."
+},
     {
       id: "checkin_checkout",
       keywordsEn: ["check in", "check-in", "check out", "check-out", "arrival", "departure"],
