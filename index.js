@@ -669,10 +669,18 @@ app.post("/webhook", async (req, res) => {
 
     const faqReply = getFaqReply(rawText, currentLanguage);
 
+console.log("rawText:", rawText);
+console.log("currentLanguage:", currentLanguage);
+console.log("faqReply:", faqReply);
+
 if (faqReply) {
+  console.log("USED: FAQ");
+
   reply = faqReply.triggersInquiryFlow
     ? startInquiryFlow(from, currentLanguage)
     : faqReply.text;
+
+  console.log("reply:", reply);
 
   await sendWhatsAppMessage(from, reply);
   return res.sendStatus(200);
@@ -685,21 +693,22 @@ const aiReply = await getAiReply({
   faqContext: "",
 });
 
+console.log("USED: AI");
+console.log("aiReply:", aiReply);
+
 if (aiReply) {
   await sendWhatsAppMessage(from, aiReply);
   return res.sendStatus(200);
 }
 
 // 👉 ако ни AI не врати ништо
+console.log("USED: HUMAN FALLBACK");
+
 reply = getHumanFallback(currentLanguage);
+console.log("reply:", reply);
 
 await sendWhatsAppMessage(from, reply);
 return res.sendStatus(200);
-    } catch (error) {
-  console.error("Webhook error:", error.response?.data || error.message || error);
-  return res.sendStatus(500);
-}
-});
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
