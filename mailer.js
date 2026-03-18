@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.re_N4vp5Vfe_LyVWAVV5VZmpwj9QTktWYcoz);
 
 export async function sendInquiryEmail(inquiry) {
   const {
