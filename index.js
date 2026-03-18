@@ -140,85 +140,109 @@ app.post("/webhook", async (req, res) => {
     // ==========================
     const faqReply = getFaqReply(rawText, currentLanguage);
 
-    if (faqReply) {
-      let reply = faqReply.text;
+    try {
+  let reply;
 
-      if (faqReply.id === "spa") {
-        reply += "\n\nYou can combine spa with a stay.";
-      }
+  // ==========================
+  // LAYER 1 — FAQ
+  // ==========================
+  const faqReply = getFaqReply(rawText, currentLanguage);
 
-      if (faqReply.triggersInquiryFlow) {
-        reply = startInquiryFlow(from, currentLanguage);
-      }
+  if (faqReply) {
+    reply = faqReply.text;
 
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
+    // example smart add-on
+    if (faqReply.id === "spa") {
+      reply +=
+        currentLanguage === "mk"
+          ? "\n\nМожете да го комбинирате спа искуството со престој."
+          : "\n\nYou can combine the spa experience with a stay.";
     }
 
-    // ==========================
-    // LAYER 2 — AI INTENT
-    // ==========================
-    const aiIntent = await detectIntentWithAI(rawText, currentLanguage);
-
-    console.log("AI INTENT:", aiIntent);
-
-    // OFFER
-    if (aiIntent.needsInquiry || aiIntent.intent === "offer") {
-      const reply = startInquiryFlow(from, currentLanguage);
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
+    // inquiry trigger
+    if (faqReply.triggersInquiryFlow) {
+      reply = startInquiryFlow(from, currentLanguage);
     }
 
-    // FAMILY
-    if (aiIntent.guestType === "family") {
-      const reply = "For families we recommend an apartment. Send dates for offer.";
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
-
-    // COUPLE
-    if (aiIntent.guestType === "couple") {
-      const reply = "For two persons, a double room is ideal. Send dates.";
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
-
-    // DIRECT FAQ BY INTENT
-    const faqFromIntent = getFaqReply(aiIntent.intent, currentLanguage);
-
-    if (faqFromIntent) {
-      await sendWhatsAppMessage(from, faqFromIntent.text);
-      return res.sendStatus(200);
-    }
-
-    // ==========================
-    // LAYER 3 — AI REPLY
-    // ==========================
-    const aiReply = await getAiReply({
-      message: rawText,
-      language: currentLanguage,
-      faqContext: hotelKnowledge.faq
-        .map((f) => `${f.id}: ${f.textEn}`)
-        .join("\n"),
-    });
-
-    if (aiReply) {
-      await sendWhatsAppMessage(from, aiReply);
-      return res.sendStatus(200);
-    }
-
-    // ==========================
-    // FALLBACK
-    // ==========================
-    reply = getHumanFallback(currentLanguage);
     await sendWhatsAppMessage(from, reply);
     return res.sendStatus(200);
-
-  } catch (err) {
-    console.error(err);
-    return res.sendStatus(500);
   }
-});
+
+  // ==========================
+  // LAYER 2 — AI INTENT
+  // ==========================
+  const aiIntent = await detectIntentWithAI(rawText, currentLanguage);
+
+  console.log("AI INTENT:", aiIntent);
+
+  // OFFER / INQUIRY
+  if (aiIntent?.needsInquiry || aiIntent?.intent === "offer") {
+    reply = startInquiryFlow(from, currentLanguage);
+
+    await sendWhatsAppMessage(from, reply);
+    return res.sendStatus(200);
+  }
+
+  // FAMILY
+  if (aiIntent?.guestType === "family") {
+    reply =
+      currentLanguage === "mk"
+        ? "За семејства препорачуваме апартман за повеќе простор. Пратете ни датуми за понуда."
+        : "For families, we recommend an apartment for more space. Send your dates for an offer.";
+
+    await sendWhatsAppMessage(from, reply);
+    return res.sendStatus(200);
+  }
+
+  // COUPLE
+  if (aiIntent?.guestType === "couple") {
+    reply =
+      currentLanguage === "mk"
+        ? "За двајца, двокреветна соба е одличен избор. Пратете ни датуми."
+        : "For two persons, a double room is ideal. Send your dates.";
+
+    await sendWhatsAppMessage(from, reply);
+    return res.sendStatus(200);
+  }
+
+  // DIRECT FAQ FROM INTENT
+  const faqFromIntent = getFaqReply(aiIntent?.intent, currentLanguage);
+
+  if (faqFromIntent) {
+    reply = faqFromIntent.text;
+
+    await sendWhatsAppMessage(from, reply);
+    return res.sendStatus(200);
+  }
+
+  // ==========================
+  // LAYER 3 — AI REPLY
+  // ==========================
+  const aiReply = await getAiReply({
+    message: rawText,
+    language: currentLanguage,
+    faqContext: hotelKnowledge.faq
+      .map((f) => `${f.id}: ${f.textEn}`)
+      .join("\n"),
+  });
+
+  if (aiReply) {
+    await sendWhatsAppMessage(from, aiReply);
+    return res.sendStatus(200);
+  }
+
+  // ==========================
+  // FALLBACK
+  // ==========================
+  reply = getHumanFallback(currentLanguage);
+
+  await sendWhatsAppMessage(from, reply);
+  return res.sendStatus(200);
+
+} catch (err) {
+  console.error(err);
+  return res.sendStatus(500);
+}
 
 app.listen(PORT, () => {
   console.log("Bot running on port", PORT);
