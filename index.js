@@ -3,6 +3,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 import { getFaqReply, hotelKnowledge } from "./knowledge.js";
 import { sendInquiryEmail } from "./mailer.js";
+import { getAiReply } from "./ai.js";
 
 dotenv.config();
 
