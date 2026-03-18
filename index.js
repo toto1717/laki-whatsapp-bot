@@ -667,51 +667,79 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    const faqReply = getFaqReply(rawText, currentLanguage);
+const faqReply = getFaqReply(rawText, currentLanguage);
 
-    console.log("rawText:", rawText);
-    console.log("currentLanguage:", currentLanguage);
-    console.log("faqReply:", faqReply);
+console.log("rawText:", rawText);
+console.log("currentLanguage:", currentLanguage);
+console.log("faqReply:", faqReply);
 
-    if (faqReply) {
-      console.log("USED: FAQ");
+if (faqReply) {
+  console.log("USED: FAQ");
 
-      reply = faqReply.triggersInquiryFlow
-        ? startInquiryFlow(from, currentLanguage)
-        : faqReply.text;
+  reply = faqReply.triggersInquiryFlow
+    ? startInquiryFlow(from, currentLanguage)
+    : faqReply.text;
 
-      console.log("reply:", reply);
+  console.log("reply:", reply);
 
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
+  await sendWhatsAppMessage(from, reply);
+  return res.sendStatus(200);
+}
 
-    // 👉 AI fallback ако нема FAQ match
-    const aiReply = await getAiReply({
-      message: rawText,
-      language: currentLanguage,
-      faqContext: "",
-    });
+const textLower = rawText.toLowerCase();
 
-    console.log("USED: AI");
-    console.log("aiReply:", aiReply);
+// 👉 FAMILY DETECTION
+if (
+  textLower.includes("2 children") ||
+  textLower.includes("kids") ||
+  textLower.includes("family")
+) {
+  const familyReply =
+    currentLanguage === "mk"
+      ? "За семејства со деца, ви препорачуваме апартман за повеќе простор и удобност. Доколку сакате, пратете ни датуми и број на гости за да ви подготвиме понуда."
+      : "For families with children, we recommend an apartment for more space and comfort. Feel free to send us your stay details and we will prepare an offer.";
 
-    if (aiReply) {
-      await sendWhatsAppMessage(from, aiReply);
-      return res.sendStatus(200);
-    }
+  await sendWhatsAppMessage(from, familyReply);
+  return res.sendStatus(200);
+}
 
-    // 👉 ако ни AI не врати ништо
-    console.log("USED: HUMAN FALLBACK");
+// 👉 COUPLE DETECTION
+if (
+  textLower.includes("2 persons") ||
+  textLower.includes("couple")
+) {
+  const coupleReply =
+    currentLanguage === "mk"
+      ? "За двајца, двокреветна соба е одличен избор. Доколку сакате, пратете ни датуми за да ви подготвиме понуда."
+      : "For two persons, a double room is a great choice. Feel free to send your dates and we will prepare an offer.";
 
-    reply = getHumanFallback(currentLanguage);
-    console.log("reply:", reply);
+  await sendWhatsAppMessage(from, coupleReply);
+  return res.sendStatus(200);
+}
 
-    await sendWhatsAppMessage(from, reply);
-    return res.sendStatus(200);
-  } catch (error) {
-    console.error("Webhook error:", error.response?.data || error.message || error);
-    return res.sendStatus(500);
+// 👉 AI fallback ако нема FAQ match
+const aiReply = await getAiReply({
+  message: rawText,
+  language: currentLanguage,
+  faqContext: "",
+});
+
+console.log("USED: AI");
+console.log("aiReply:", aiReply);
+
+if (aiReply) {
+  await sendWhatsAppMessage(from, aiReply);
+  return res.sendStatus(200);
+}
+
+// 👉 ако ни AI не врати ништо
+console.log("USED: HUMAN FALLBACK");
+
+reply = getHumanFallback(currentLanguage);
+console.log("reply:", reply);
+
+await sendWhatsAppMessage(from, reply);
+return res.sendStatus(200);
   }
 });
 
