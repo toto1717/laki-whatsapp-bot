@@ -26,14 +26,15 @@ export async function sendInquiryEmail(inquiry) {
     `Special request: ${specialRequest || "None"}\n`;
 
   try {
-    await resend.emails.send({
+    const response = await resend.emails.send({
       from: "Laki Hotel <onboarding@resend.dev>",
       to: [process.env.MAIL_TO],
+      reply_to: email, // 🔥 ОВА Е КЛУЧНО
       subject: `New hotel inquiry - ${name}`,
       text,
     });
 
-    console.log("EMAIL SENT VIA RESEND");
+    console.log("EMAIL SENT VIA RESEND:", response);
   } catch (err) {
     console.error("RESEND ERROR:", err);
     throw err;
