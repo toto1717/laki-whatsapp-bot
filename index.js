@@ -487,23 +487,20 @@ app.post("/webhook", async (req, res) => {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
-    const messageId = message?.id;
-
-if (!message) {
-  return res.sendStatus(200);
-}
-
-if (messageId && hasProcessedMessage(messageId)) {
-  console.log("Duplicate webhook ignored:", messageId);
-  return res.sendStatus(200);
-}
-
-if (messageId) {
-  markMessageAsProcessed(messageId);
-}
 
     if (!message) {
       return res.sendStatus(200);
+    }
+
+    const messageId = message?.id;
+
+    if (messageId && hasProcessedMessage(messageId)) {
+      console.log("Duplicate webhook ignored:", messageId);
+      return res.sendStatus(200);
+    }
+
+    if (messageId) {
+      markMessageAsProcessed(messageId);
     }
 
     const from = message.from;
@@ -529,7 +526,8 @@ if (messageId) {
       delete userLanguage[from];
       resetInquiryFlow(from);
       reply =
-        "Session reset successfully.\n\n" + getLanguageMenu();
+        "Session reset successfully / Сесијата е успешно ресетирана.\n\n" +
+        getLanguageMenu();
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
@@ -545,12 +543,11 @@ if (messageId) {
     }
 
     if (userInquiryState[from]) {
+      const inquiryLanguage = userInquiryState[from].language;
+
       if (matchesCommand(rawText, COMMANDS.menu)) {
         resetInquiryFlow(from);
-        reply =
-          userInquiryState[from]?.language === "mk"
-            ? getMacedonianMenu()
-            : getEnglishMenu();
+        reply = inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
       } else {
         reply = await handleInquiryStep(from, rawText);
       }
@@ -685,8 +682,4 @@ if (messageId) {
     console.error("Webhook error:", error.response?.data || error.message || error);
     return res.sendStatus(500);
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
 });
