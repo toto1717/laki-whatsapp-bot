@@ -669,20 +669,36 @@ app.post("/webhook", async (req, res) => {
 
     const faqReply = getFaqReply(rawText, currentLanguage);
 
-    if (faqReply) {
-      reply = faqReply.triggersInquiryFlow
-        ? startInquiryFlow(from, currentLanguage)
-        : faqReply.text;
-    } else {
-      reply = getHumanFallback(currentLanguage);
-    }
+if (faqReply) {
+  reply = faqReply.triggersInquiryFlow
+    ? startInquiryFlow(from, currentLanguage)
+    : faqReply.text;
 
-        await sendWhatsAppMessage(from, reply);
-    return res.sendStatus(200);
-  } catch (error) {
-    console.error("Webhook error:", error.response?.data || error.message || error);
-    return res.sendStatus(500);
-  }
+  await sendWhatsAppMessage(from, reply);
+  return res.sendStatus(200);
+}
+
+// 👉 AI fallback ако нема FAQ match
+const aiReply = await getAiReply({
+  message: rawText,
+  language: currentLanguage,
+  faqContext: "",
+});
+
+if (aiReply) {
+  await sendWhatsAppMessage(from, aiReply);
+  return res.sendStatus(200);
+}
+
+// 👉 ако ни AI не врати ништо
+reply = getHumanFallback(currentLanguage);
+
+await sendWhatsAppMessage(from, reply);
+return res.sendStatus(200);
+    } catch (error) {
+  console.error("Webhook error:", error.response?.data || error.message || error);
+  return res.sendStatus(500);
+}
 });
 
 app.listen(PORT, () => {
