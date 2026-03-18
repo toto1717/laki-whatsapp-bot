@@ -673,55 +673,109 @@ console.log("rawText:", rawText);
 console.log("currentLanguage:", currentLanguage);
 console.log("faqReply:", faqReply);
 
+// ==========================
+// LAYER 1 — FAQ MATCH
+// ==========================
 if (faqReply) {
   console.log("USED: FAQ");
 
-  reply = faqReply.triggersInquiryFlow
-    ? startInquiryFlow(from, currentLanguage)
-    : faqReply.text;
+  let replyText = faqReply.text;
 
-  console.log("reply:", reply);
+  // 👉 SMART ADD-ONS (context aware)
+  const textLower = rawText.toLowerCase();
+
+  if (faqReply.id === "spa") {
+    replyText +=
+      currentLanguage === "mk"
+        ? "\n\nМожете да комбинирате СПА со престој во соба или апартман за целосно релаксирачко искуство."
+        : "\n\nYou can combine spa access with a stay in a room or apartment for a complete relaxing experience.";
+  }
+
+  if (faqReply.id === "rooms") {
+    if (
+      textLower.includes("family") ||
+      textLower.includes("kids") ||
+      textLower.includes("children")
+    ) {
+      replyText +=
+        currentLanguage === "mk"
+          ? "\n\nЗа семејства, ви препорачуваме апартман за повеќе простор и удобност."
+          : "\n\nFor families, we recommend an apartment for more space and comfort.";
+    }
+
+    if (
+      textLower.includes("couple") ||
+      textLower.includes("2 persons")
+    ) {
+      replyText +=
+        currentLanguage === "mk"
+          ? "\n\nЗа двајца, двокреветна соба е одличен избор."
+          : "\n\nFor two persons, a double room is a great choice.";
+    }
+  }
+
+  const finalReply = faqReply.triggersInquiryFlow
+    ? startInquiryFlow(from, currentLanguage)
+    : replyText;
+
+  await sendWhatsAppMessage(from, finalReply);
+  return res.sendStatus(200);
+}
+
+// ==========================
+// LAYER 2 — INTENT DETECTION (LIGHT AI)
+// ==========================
+const textLower = rawText.toLowerCase();
+
+let detectedIntent = null;
+
+if (
+  textLower.includes("family") ||
+  textLower.includes("kids") ||
+  textLower.includes("children")
+) {
+  detectedIntent = "family";
+}
+
+if (
+  textLower.includes("couple") ||
+  textLower.includes("2 persons")
+) {
+  detectedIntent = "couple";
+}
+
+// ==========================
+// LAYER 3 — SMART REPLY FROM INTENT
+// ==========================
+if (detectedIntent === "family") {
+  const reply =
+    currentLanguage === "mk"
+      ? "За семејства со деца, ви препорачуваме апартман за повеќе простор и удобност.\n\nДоколку сакате, пратете ни датуми и број на гости за да ви подготвиме понуда."
+      : "For families with children, we recommend an apartment for more space and comfort.\n\nFeel free to send your stay details and we will prepare an offer.";
 
   await sendWhatsAppMessage(from, reply);
   return res.sendStatus(200);
 }
 
-const textLower = rawText.toLowerCase();
-
-// 👉 FAMILY DETECTION
-if (
-  textLower.includes("2 children") ||
-  textLower.includes("kids") ||
-  textLower.includes("family")
-) {
-  const familyReply =
+if (detectedIntent === "couple") {
+  const reply =
     currentLanguage === "mk"
-      ? "За семејства со деца, ви препорачуваме апартман за повеќе простор и удобност. Доколку сакате, пратете ни датуми и број на гости за да ви подготвиме понуда."
-      : "For families with children, we recommend an apartment for more space and comfort. Feel free to send us your stay details and we will prepare an offer.";
+      ? "За двајца, двокреветна соба е одличен избор.\n\nДоколку сакате, пратете ни датуми за да ви подготвиме понуда."
+      : "For two persons, a double room is a great choice.\n\nFeel free to send your dates and we will prepare an offer.";
 
-  await sendWhatsAppMessage(from, familyReply);
+  await sendWhatsAppMessage(from, reply);
   return res.sendStatus(200);
 }
 
-// 👉 COUPLE DETECTION
-if (
-  textLower.includes("2 persons") ||
-  textLower.includes("couple")
-) {
-  const coupleReply =
-    currentLanguage === "mk"
-      ? "За двајца, двокреветна соба е одличен избор. Доколку сакате, пратете ни датуми за да ви подготвиме понуда."
-      : "For two persons, a double room is a great choice. Feel free to send your dates and we will prepare an offer.";
-
-  await sendWhatsAppMessage(from, coupleReply);
-  return res.sendStatus(200);
-}
-
-// 👉 AI fallback ако нема FAQ match
+// ==========================
+// LAYER 4 — AI RESPONSE (CONTROLLED)
+// ==========================
 const aiReply = await getAiReply({
   message: rawText,
   language: currentLanguage,
-  faqContext: "",
+  faqContext: hotelKnowledge.faq
+    .map((f) => `${f.id}: ${currentLanguage === "mk" ? f.textMk : f.textEn}`)
+    .join("\n"),
 });
 
 console.log("USED: AI");
@@ -732,11 +786,12 @@ if (aiReply) {
   return res.sendStatus(200);
 }
 
-// 👉 ако ни AI не врати ништо
+// ==========================
+// LAYER 5 — HUMAN FALLBACK
+// ==========================
 console.log("USED: HUMAN FALLBACK");
 
-reply = getHumanFallback(currentLanguage);
-console.log("reply:", reply);
+const reply = getHumanFallback(currentLanguage);
 
 await sendWhatsAppMessage(from, reply);
 return res.sendStatus(200);
@@ -746,3 +801,4 @@ return res.sendStatus(200);
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+  
