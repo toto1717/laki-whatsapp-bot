@@ -18,432 +18,63 @@ const PORT = process.env.PORT || 3000;
 const userLanguage = {};
 const userInquiryState = {};
 const processedMessages = new Map();
-const PROCESSED_MESSAGE_TTL_MS = 10 * 60 * 1000;
 
-function cleanupProcessedMessages() {
-  const now = Date.now();
+// ==========================
+// AI INTENT FUNCTION
+// ==========================
+async function detectIntentWithAI(message, language) {
+  try {
+    const prompt = `
+You are an AI assistant for a hotel.
 
-  for (const [messageId, timestamp] of processedMessages.entries()) {
-    if (now - timestamp > PROCESSED_MESSAGE_TTL_MS) {
-      processedMessages.delete(messageId);
-    }
-  }
+Classify the user message into:
+
+intents:
+- spa
+- restaurant
+- parking
+- location
+- contact
+- rooms
+- offer
+- checkin_checkout
+- children_policy
+- baby_crib
+- unknown
+
+Also detect:
+- guestType: family | couple | none
+- needsInquiry: true if asking about price/availability/booking
+
+Return ONLY JSON:
+{
+  "intent": "spa",
+  "guestType": "family",
+  "needsInquiry": false,
+  "confidence": 0.9
 }
 
-function hasProcessedMessage(messageId) {
-  cleanupProcessedMessages();
-  return processedMessages.has(messageId);
-}
+Message: "${message}"
+`;
 
-function markMessageAsProcessed(messageId) {
-  cleanupProcessedMessages();
-  processedMessages.set(messageId, Date.now());
-}
-
-const COMMANDS = {
-  menu: ["menu", "мени"],
-  language: ["language", "јазик", "jazik"],
-  reset: ["reset", "ресет"],
-  cancel: ["cancel", "откажи", "stop", "стоп"],
-  contact: ["contact", "контакт"],
-};
-
-function normalizeCommand(text = "") {
-  return text.trim().toLowerCase();
-}
-
-function matchesCommand(text, commandList = []) {
-  const normalized = normalizeCommand(text);
-  return commandList.includes(normalized);
-}
-
-function getLanguageMenu() {
-  return (
-    "Welcome to Laki Hotel & Spa 🏨\n\n" +
-    "Please choose your language / Ве молиме изберете јазик:\n" +
-    "1. English\n" +
-    "2. Македонски"
-  );
-}
-
-function getEnglishMenu() {
-  return (
-    "Welcome to Laki Hotel & Spa 🏨\n\n" +
-    "How can we help you?\n" +
-    "1. Prices / Offer\n" +
-    "2. Rooms & Apartments\n" +
-    "3. Spa\n" +
-    "4. Restaurant\n" +
-    "5. Parking\n" +
-    "6. Location\n" +
-    "7. Contact\n\n" +
-    "Useful commands:\n" +
-    "- menu\n" +
-    "- language\n" +
-    "- reset\n" +
-    "- cancel\n" +
-    "- contact\n\n" +
-    "You can also type your question directly."
-  );
-}
-
-function getMacedonianMenu() {
-  return (
-    "Добредојдовте во Laki Hotel & Spa 🏨\n\n" +
-    "Како можеме да ви помогнеме?\n" +
-    "1. Цени / Понуда\n" +
-    "2. Соби и апартмани\n" +
-    "3. СПА\n" +
-    "4. Ресторан\n" +
-    "5. Паркинг\n" +
-    "6. Локација\n" +
-    "7. Контакт\n\n" +
-    "Корисни команди:\n" +
-    "- мени\n" +
-    "- јазик\n" +
-    "- ресет\n" +
-    "- откажи\n" +
-    "- контакт\n\n" +
-    "Или напишете прашање директно."
-  );
-}
-
-function getHumanFallback(language = "en") {
-  if (language === "mk") {
-    return (
-      "Во моментов немаме точен автоматски одговор на ова прашање.\n" +
-      `Ве молиме контактирајте не на ${hotelKnowledge.hotel.email} или јавете се на ${hotelKnowledge.hotel.phone}.\n\n` +
-      getMacedonianMenu()
-    );
-  }
-
-  return (
-    "At the moment, we do not have an exact automatic answer to this question.\n" +
-    `Please contact us at ${hotelKnowledge.hotel.email} or call ${hotelKnowledge.hotel.phone}.\n\n` +
-    getEnglishMenu()
-  );
-}
-
-function resetInquiryFlow(from) {
-  delete userInquiryState[from];
-}
-
-function startInquiryFlow(from, language) {
-  userInquiryState[from] = {
-    step: "checkin",
-    language,
-    data: {},
-  };
-
-  return language === "mk"
-    ? "За да ви подготвиме понуда, ве молиме внесете check-in датум.\nФормат: 10.04.2026"
-    : "To prepare an offer, please enter your check-in date.\nFormat: 10.04.2026";
-}
-
-function isValidDateFormat(value) {
-  return /^\d{2}\.\d{2}\.\d{4}$/.test(value);
-}
-
-function parseDate(value) {
-  if (!isValidDateFormat(value)) return null;
-
-  const [dayStr, monthStr, yearStr] = value.split(".");
-  const day = Number(dayStr);
-  const month = Number(monthStr);
-  const year = Number(yearStr);
-
-  const date = new Date(year, month - 1, day);
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-
-  return date;
-}
-
-function isPositiveInteger(value) {
-  return /^\d+$/.test(value);
-}
-
-function isValidName(value) {
-  const trimmed = value.trim();
-  if (trimmed.length < 2) return false;
-  if (/^\d+$/.test(trimmed)) return false;
-  return /[A-Za-zА-Ша-ш]/.test(trimmed);
-}
-
-function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-}
-
-function isValidChildrenAges(value) {
-  const trimmed = value.trim();
-
-  if (!trimmed) return false;
-
-  const parts = trimmed
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  if (!parts.length) return false;
-
-  return parts.every((item) => /^\d{1,2}$/.test(item) && Number(item) >= 0 && Number(item) <= 17);
-}
-
-function formatChildrenValue(count, ages, language) {
-  if (Number(count) === 0) {
-    return language === "mk" ? "0" : "0";
-  }
-
-  return language === "mk"
-    ? `${count} (возраст: ${ages})`
-    : `${count} (ages: ${ages})`;
-}
-
-async function handleInquiryStep(from, rawText) {
-  const inquiry = userInquiryState[from];
-  if (!inquiry) return null;
-
-  const language = inquiry.language;
-  const msg = rawText.trim();
-  const lowerMsg = msg.toLowerCase();
-
-  if (matchesCommand(lowerMsg, COMMANDS.cancel)) {
-    resetInquiryFlow(from);
-    return language === "mk"
-      ? "Барањето е откажано.\n\n" + getMacedonianMenu()
-      : "Inquiry cancelled.\n\n" + getEnglishMenu();
-  }
-
-  if (inquiry.step === "checkin") {
-    if (!isValidDateFormat(msg) || !parseDate(msg)) {
-      return language === "mk"
-        ? "Невалиден датум.\nВнесете check-in датум во формат: 10.04.2026"
-        : "Invalid date.\nPlease enter check-in date in format: 10.04.2026";
-    }
-
-    inquiry.data.checkin = msg;
-    inquiry.step = "checkout";
-
-    return language === "mk"
-      ? "Внесете check-out датум.\nФормат: 12.04.2026"
-      : "Please enter your check-out date.\nFormat: 12.04.2026";
-  }
-
-  if (inquiry.step === "checkout") {
-    if (!isValidDateFormat(msg) || !parseDate(msg)) {
-      return language === "mk"
-        ? "Невалиден датум.\nВнесете check-out датум во формат: 12.04.2026"
-        : "Invalid date.\nPlease enter check-out date in format: 12.04.2026";
-    }
-
-    const checkinDate = parseDate(inquiry.data.checkin);
-    const checkoutDate = parseDate(msg);
-
-    if (!checkinDate || !checkoutDate || checkoutDate <= checkinDate) {
-      return language === "mk"
-        ? "Check-out датумот мора да биде после check-in датумот.\nВнесете валиден check-out датум."
-        : "Check-out date must be after check-in date.\nPlease enter a valid check-out date.";
-    }
-
-    inquiry.data.checkout = msg;
-    inquiry.step = "adults";
-
-    return language === "mk"
-      ? "Колку возрасни гости ќе има?\nВнесете број, на пример: 2"
-      : "How many adults will stay?\nEnter a number, for example: 2";
-  }
-
-  if (inquiry.step === "adults") {
-    if (!isPositiveInteger(msg) || Number(msg) < 1) {
-      return language === "mk"
-        ? "Невалиден број.\nБројот на возрасни мора да биде најмалку 1."
-        : "Invalid number.\nThe number of adults must be at least 1.";
-    }
-
-    inquiry.data.adults = msg;
-    inquiry.step = "children";
-
-    return language === "mk"
-      ? "Колку деца ќе има?\nАко нема, внесете 0."
-      : "How many children will stay?\nIf none, enter 0.";
-  }
-
-  if (inquiry.step === "children") {
-    if (!isPositiveInteger(msg) || Number(msg) < 0) {
-      return language === "mk"
-        ? "Невалиден број.\nЗа деца внесете 0 или поголем број."
-        : "Invalid number.\nFor children, enter 0 or a higher number.";
-    }
-
-    inquiry.data.children = msg;
-
-    if (Number(msg) > 0) {
-      inquiry.step = "children_ages";
-
-      return language === "mk"
-        ? "Внесете ја возраста на децата одвоена со запирка.\nПример: 4, 7"
-        : "Please enter the children's ages separated by commas.\nExample: 4, 7";
-    }
-
-    inquiry.data.childrenAges = "";
-    inquiry.step = "name";
-
-    return language === "mk"
-      ? "Ве молиме внесете го вашето име:"
-      : "Please enter your name:";
-  }
-
-  if (inquiry.step === "children_ages") {
-    if (!isValidChildrenAges(msg)) {
-      return language === "mk"
-        ? "Невалиден внес.\nВнесете ја возраста на децата со броеви одвоени со запирка.\nПример: 4, 7"
-        : "Invalid input.\nPlease enter the children's ages as numbers separated by commas.\nExample: 4, 7";
-    }
-
-    inquiry.data.childrenAges = msg;
-    inquiry.step = "name";
-
-    return language === "mk"
-      ? "Ве молиме внесете го вашето име:"
-      : "Please enter your name:";
-  }
-
-  if (inquiry.step === "name") {
-    if (!isValidName(msg)) {
-      return language === "mk"
-        ? "Невалидно име.\nВе молиме внесете валидно име и презиме."
-        : "Invalid name.\nPlease enter a valid name.";
-    }
-
-    inquiry.data.name = msg;
-    inquiry.step = "email";
-
-    return language === "mk"
-      ? "Ве молиме внесете e-mail адреса:"
-      : "Please enter your email address:";
-  }
-
-  if (inquiry.step === "email") {
-    if (!isValidEmail(msg)) {
-      return language === "mk"
-        ? "Невалидна e-mail адреса.\nВе молиме внесете валидна e-mail адреса."
-        : "Invalid email address.\nPlease enter a valid email address.";
-    }
-
-    inquiry.data.email = msg;
-    inquiry.step = "special_request";
-
-    return language === "mk"
-      ? "Доколку имате дополнително барање, напишете го сега.\nПример: baby crib, late arrival\nАко немате, напишете: нема"
-      : "If you have any additional request, please type it now.\nExample: baby crib, late arrival\nIf none, type: none";
-  }
-
-  if (inquiry.step === "special_request") {
-    inquiry.data.specialRequest =
-      lowerMsg === "нема" || lowerMsg === "none" ? "" : msg;
-
-    const emailPayload = {
-      fromWhatsApp: from,
+    const ai = await getAiReply({
+      message: prompt,
       language,
-      checkin: inquiry.data.checkin,
-      checkout: inquiry.data.checkout,
-      adults: inquiry.data.adults,
-      children: inquiry.data.children,
-      childrenAges: inquiry.data.childrenAges,
-      name: inquiry.data.name,
-      email: inquiry.data.email,
-      specialRequest: inquiry.data.specialRequest,
-    };
+      faqContext: "",
+    });
 
-    let emailSent = true;
+    const clean = ai.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
 
-    try {
-      await sendInquiryEmail(emailPayload);
-    } catch (emailError) {
-      emailSent = false;
-      console.error("Email send error:", emailError.message || emailError);
-    }
-
-    const childrenDisplayMk = formatChildrenValue(
-      inquiry.data.children,
-      inquiry.data.childrenAges,
-      "mk"
-    );
-    const childrenDisplayEn = formatChildrenValue(
-      inquiry.data.children,
-      inquiry.data.childrenAges,
-      "en"
-    );
-
-    const specialRequestMk = inquiry.data.specialRequest || "нема";
-    const specialRequestEn = inquiry.data.specialRequest || "none";
-
-    const summaryMk =
-      "Ви благодариме. Вашето барање е примено.\n\n" +
-      `Check-in: ${inquiry.data.checkin}\n` +
-      `Check-out: ${inquiry.data.checkout}\n` +
-      `Возрасни: ${inquiry.data.adults}\n` +
-      `Деца: ${childrenDisplayMk}\n` +
-      `Име: ${inquiry.data.name}\n` +
-      `Email: ${inquiry.data.email}\n` +
-      `Дополнително барање: ${specialRequestMk}\n\n` +
-      (emailSent
-        ? "Вашето барање е успешно испратено и на нашиот e-mail.\nЌе ви испратиме понуда што е можно поскоро.\n"
-        : "Вашето барање е примено, но моментално има проблем со автоматското e-mail испраќање.\nВе молиме за итни информации контактирајте не директно.\n") +
-      `Контакт: ${hotelKnowledge.hotel.email} / ${hotelKnowledge.hotel.phone}`;
-
-    const summaryEn =
-      "Thank you. Your inquiry has been received.\n\n" +
-      `Check-in: ${inquiry.data.checkin}\n` +
-      `Check-out: ${inquiry.data.checkout}\n` +
-      `Adults: ${inquiry.data.adults}\n` +
-      `Children: ${childrenDisplayEn}\n` +
-      `Name: ${inquiry.data.name}\n` +
-      `Email: ${inquiry.data.email}\n` +
-      `Additional request: ${specialRequestEn}\n\n` +
-      (emailSent
-        ? "Your inquiry has also been sent to our email.\nWe will send you an offer as soon as possible.\n"
-        : "Your inquiry has been received, but there is currently a problem with automatic email delivery.\nFor urgent information, please contact us directly.\n") +
-      `Contact: ${hotelKnowledge.hotel.email} / ${hotelKnowledge.hotel.phone}`;
-
-    resetInquiryFlow(from);
-    return language === "mk" ? summaryMk : summaryEn;
+  } catch (err) {
+    console.log("AI intent error:", err);
+    return { intent: "unknown", guestType: "none", needsInquiry: false };
   }
-
-  return null;
 }
 
-function shouldStartInquiryFlow(text, language) {
-  const t = text.toLowerCase();
-
-  if (language === "mk") {
-    return (
-      t === "1" ||
-      t.includes("цена") ||
-      t.includes("цени") ||
-      t.includes("понуда") ||
-      t.includes("достапност") ||
-      t.includes("резервација")
-    );
-  }
-
-  return (
-    t === "1" ||
-    t.includes("price") ||
-    t.includes("prices") ||
-    t.includes("offer") ||
-    t.includes("availability") ||
-    t.includes("booking") ||
-    t.includes("reservation")
-  );
-}
-
+// ==========================
+// SEND MESSAGE
+// ==========================
 async function sendWhatsAppMessage(to, body) {
   await axios.post(
     `https://graph.facebook.com/v22.0/${PHONE_NUMBER_ID}/messages`,
@@ -461,344 +92,134 @@ async function sendWhatsAppMessage(to, body) {
   );
 }
 
-app.get("/", (req, res) => {
-  res.status(200).json({
-    service: "Laki WhatsApp Bot",
-    status: "running",
-    version: "1.0.0",
-    features: ["FAQ", "Inquiry Flow", "Email"],
-    timestamp: new Date().toISOString(),
-  });
-});
+// ==========================
+// HUMAN FALLBACK
+// ==========================
+function getHumanFallback(language = "en") {
+  return language === "mk"
+    ? `За точни информации контактирајте не на ${hotelKnowledge.hotel.email}`
+    : `For accurate info contact us at ${hotelKnowledge.hotel.email}`;
+}
 
+// ==========================
+// SIMPLE INQUIRY START
+// ==========================
+function startInquiryFlow(from, language) {
+  return language === "mk"
+    ? "Ве молиме испратете ни датум и број на гости за понуда."
+    : "Please send your dates and number of guests for an offer.";
+}
+
+// ==========================
+// WEBHOOK VERIFY
+// ==========================
 app.get("/webhook", (req, res) => {
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
-
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified");
-    return res.status(200).send(challenge);
+  if (req.query["hub.verify_token"] === VERIFY_TOKEN) {
+    return res.send(req.query["hub.challenge"]);
   }
-
-  return res.sendStatus(403);
+  res.sendStatus(403);
 });
 
+// ==========================
+// MAIN BOT
+// ==========================
 app.post("/webhook", async (req, res) => {
   try {
-    const value = req.body?.entry?.[0]?.changes?.[0]?.value;
-    const message = value?.messages?.[0];
-
-    if (!message) {
-      return res.sendStatus(200);
-    }
-
-    const messageId = message?.id;
-
-    if (messageId && hasProcessedMessage(messageId)) {
-      console.log("Duplicate webhook ignored:", messageId);
-      return res.sendStatus(200);
-    }
-
-    if (messageId) {
-      markMessageAsProcessed(messageId);
-    }
+    const message = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!message) return res.sendStatus(200);
 
     const from = message.from;
     const rawText = (message.text?.body || "").trim();
-    const text = rawText.toLowerCase();
 
-    if (!rawText) {
-      return res.sendStatus(200);
-    }
+    if (!rawText) return res.sendStatus(200);
 
-    let reply = "";
-    const currentLanguage = userLanguage[from] || null;
+    const currentLanguage = userLanguage[from] || "en";
 
-    if (matchesCommand(rawText, COMMANDS.language)) {
-      delete userLanguage[from];
-      resetInquiryFlow(from);
-      reply = getLanguageMenu();
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
+    // ==========================
+    // LAYER 1 — FAQ
+    // ==========================
+    const faqReply = getFaqReply(rawText, currentLanguage);
 
-    if (matchesCommand(rawText, COMMANDS.reset)) {
-      delete userLanguage[from];
-      resetInquiryFlow(from);
-      reply =
-        "Session reset successfully / Сесијата е успешно ресетирана.\n\n" +
-        getLanguageMenu();
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
+    if (faqReply) {
+      let reply = faqReply.text;
 
-    if (matchesCommand(rawText, COMMANDS.contact)) {
-      reply =
-        currentLanguage === "mk"
-          ? getFaqReply("contact", "mk")?.text || hotelKnowledge.hotel.fallbackMessageMk
-          : getFaqReply("contact", "en")?.text || hotelKnowledge.hotel.fallbackMessageEn;
+      if (faqReply.id === "spa") {
+        reply += "\n\nYou can combine spa with a stay.";
+      }
 
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
-
-    if (userInquiryState[from]) {
-      const inquiryLanguage = userInquiryState[from].language;
-
-      if (matchesCommand(rawText, COMMANDS.menu)) {
-        resetInquiryFlow(from);
-        reply = inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
-      } else {
-        reply = await handleInquiryStep(from, rawText);
+      if (faqReply.triggersInquiryFlow) {
+        reply = startInquiryFlow(from, currentLanguage);
       }
 
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    if (!currentLanguage) {
-      if (text === "1" || text === "english" || text === "en") {
-        userLanguage[from] = "en";
-        reply = getEnglishMenu();
-      } else if (text === "2" || text === "македонски" || text === "mk") {
-        userLanguage[from] = "mk";
-        reply = getMacedonianMenu();
-      } else {
-        reply = getLanguageMenu();
-      }
+    // ==========================
+    // LAYER 2 — AI INTENT
+    // ==========================
+    const aiIntent = await detectIntentWithAI(rawText, currentLanguage);
 
+    console.log("AI INTENT:", aiIntent);
+
+    // OFFER
+    if (aiIntent.needsInquiry || aiIntent.intent === "offer") {
+      const reply = startInquiryFlow(from, currentLanguage);
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    if (matchesCommand(rawText, COMMANDS.menu)) {
-      reply = currentLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
+    // FAMILY
+    if (aiIntent.guestType === "family") {
+      const reply = "For families we recommend an apartment. Send dates for offer.";
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    if (matchesCommand(rawText, COMMANDS.cancel)) {
-      resetInquiryFlow(from);
-      reply = currentLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
+    // COUPLE
+    if (aiIntent.guestType === "couple") {
+      const reply = "For two persons, a double room is ideal. Send dates.";
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    if (shouldStartInquiryFlow(rawText, currentLanguage)) {
-      reply = startInquiryFlow(from, currentLanguage);
-      await sendWhatsAppMessage(from, reply);
+    // DIRECT FAQ BY INTENT
+    const faqFromIntent = getFaqReply(aiIntent.intent, currentLanguage);
+
+    if (faqFromIntent) {
+      await sendWhatsAppMessage(from, faqFromIntent.text);
       return res.sendStatus(200);
     }
 
-    if (currentLanguage === "en") {
-      if (text === "2") {
-        reply = getFaqReply("rooms", "en")?.text || getHumanFallback("en");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
+    // ==========================
+    // LAYER 3 — AI REPLY
+    // ==========================
+    const aiReply = await getAiReply({
+      message: rawText,
+      language: currentLanguage,
+      faqContext: hotelKnowledge.faq
+        .map((f) => `${f.id}: ${f.textEn}`)
+        .join("\n"),
+    });
 
-      if (text === "3") {
-        reply = getFaqReply("spa", "en")?.text || getHumanFallback("en");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "4") {
-        reply = getFaqReply("restaurant", "en")?.text || getHumanFallback("en");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "5") {
-        reply = getFaqReply("parking", "en")?.text || getHumanFallback("en");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "6") {
-        reply = getFaqReply("location", "en")?.text || getHumanFallback("en");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "7") {
-        reply = getFaqReply("contact", "en")?.text || getHumanFallback("en");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
+    if (aiReply) {
+      await sendWhatsAppMessage(from, aiReply);
+      return res.sendStatus(200);
     }
 
-    if (currentLanguage === "mk") {
-      if (text === "2") {
-        reply = getFaqReply("rooms", "mk")?.text || getHumanFallback("mk");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
+    // ==========================
+    // FALLBACK
+    // ==========================
+    const reply = getHumanFallback(currentLanguage);
+    await sendWhatsAppMessage(from, reply);
+    return res.sendStatus(200);
 
-      if (text === "3") {
-        reply = getFaqReply("spa", "mk")?.text || getHumanFallback("mk");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "4") {
-        reply = getFaqReply("restaurant", "mk")?.text || getHumanFallback("mk");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "5") {
-        reply = getFaqReply("parking", "mk")?.text || getHumanFallback("mk");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "6") {
-        reply = getFaqReply("location", "mk")?.text || getHumanFallback("mk");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-
-      if (text === "7") {
-        reply = getFaqReply("contact", "mk")?.text || getHumanFallback("mk");
-        await sendWhatsAppMessage(from, reply);
-        return res.sendStatus(200);
-      }
-    }
-
-const faqReply = getFaqReply(rawText, currentLanguage);
-
-console.log("rawText:", rawText);
-console.log("currentLanguage:", currentLanguage);
-console.log("faqReply:", faqReply);
-
-// ==========================
-// LAYER 1 — FAQ MATCH
-// ==========================
-if (faqReply) {
-  console.log("USED: FAQ");
-
-  let replyText = faqReply.text;
-
-  // 👉 SMART ADD-ONS (context aware)
-  const textLower = rawText.toLowerCase();
-
-  if (faqReply.id === "spa") {
-    replyText +=
-      currentLanguage === "mk"
-        ? "\n\nМожете да комбинирате СПА со престој во соба или апартман за целосно релаксирачко искуство."
-        : "\n\nYou can combine spa access with a stay in a room or apartment for a complete relaxing experience.";
-  }
-
-  if (faqReply.id === "rooms") {
-    if (
-      textLower.includes("family") ||
-      textLower.includes("kids") ||
-      textLower.includes("children")
-    ) {
-      replyText +=
-        currentLanguage === "mk"
-          ? "\n\nЗа семејства, ви препорачуваме апартман за повеќе простор и удобност."
-          : "\n\nFor families, we recommend an apartment for more space and comfort.";
-    }
-
-    if (
-      textLower.includes("couple") ||
-      textLower.includes("2 persons")
-    ) {
-      replyText +=
-        currentLanguage === "mk"
-          ? "\n\nЗа двајца, двокреветна соба е одличен избор."
-          : "\n\nFor two persons, a double room is a great choice.";
-    }
-  }
-
-  const finalReply = faqReply.triggersInquiryFlow
-    ? startInquiryFlow(from, currentLanguage)
-    : replyText;
-
-  await sendWhatsAppMessage(from, finalReply);
-  return res.sendStatus(200);
-}
-
-// ==========================
-// LAYER 2 — INTENT DETECTION (LIGHT AI)
-// ==========================
-const textLower = rawText.toLowerCase();
-
-let detectedIntent = null;
-
-if (
-  textLower.includes("family") ||
-  textLower.includes("kids") ||
-  textLower.includes("children")
-) {
-  detectedIntent = "family";
-}
-
-if (
-  textLower.includes("couple") ||
-  textLower.includes("2 persons")
-) {
-  detectedIntent = "couple";
-}
-
-// ==========================
-// LAYER 3 — SMART REPLY FROM INTENT
-// ==========================
-if (detectedIntent === "family") {
-  const reply =
-    currentLanguage === "mk"
-      ? "За семејства со деца, ви препорачуваме апартман за повеќе простор и удобност.\n\nДоколку сакате, пратете ни датуми и број на гости за да ви подготвиме понуда."
-      : "For families with children, we recommend an apartment for more space and comfort.\n\nFeel free to send your stay details and we will prepare an offer.";
-
-  await sendWhatsAppMessage(from, reply);
-  return res.sendStatus(200);
-}
-
-if (detectedIntent === "couple") {
-  const reply =
-    currentLanguage === "mk"
-      ? "За двајца, двокреветна соба е одличен избор.\n\nДоколку сакате, пратете ни датуми за да ви подготвиме понуда."
-      : "For two persons, a double room is a great choice.\n\nFeel free to send your dates and we will prepare an offer.";
-
-  await sendWhatsAppMessage(from, reply);
-  return res.sendStatus(200);
-}
-
-// ==========================
-// LAYER 4 — AI RESPONSE (CONTROLLED)
-// ==========================
-const aiReply = await getAiReply({
-  message: rawText,
-  language: currentLanguage,
-  faqContext: hotelKnowledge.faq
-    .map((f) => `${f.id}: ${currentLanguage === "mk" ? f.textMk : f.textEn}`)
-    .join("\n"),
-});
-
-console.log("USED: AI");
-console.log("aiReply:", aiReply);
-
-if (aiReply) {
-  await sendWhatsAppMessage(from, aiReply);
-  return res.sendStatus(200);
-}
-
-// ==========================
-// LAYER 5 — HUMAN FALLBACK
-// ==========================
-console.log("USED: HUMAN FALLBACK");
-
-const reply = getHumanFallback(currentLanguage);
-
-await sendWhatsAppMessage(from, reply);
-return res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    return res.sendStatus(500);
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log("Bot running on port", PORT);
 });
-  
