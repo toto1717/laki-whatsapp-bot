@@ -16,6 +16,28 @@ const PORT = process.env.PORT || 3000;
 
 const userLanguage = {};
 const userInquiryState = {};
+const processedMessages = new Map();
+const PROCESSED_MESSAGE_TTL_MS = 10 * 60 * 1000;
+
+function cleanupProcessedMessages() {
+  const now = Date.now();
+
+  for (const [messageId, timestamp] of processedMessages.entries()) {
+    if (now - timestamp > PROCESSED_MESSAGE_TTL_MS) {
+      processedMessages.delete(messageId);
+    }
+  }
+}
+
+function hasProcessedMessage(messageId) {
+  cleanupProcessedMessages();
+  return processedMessages.has(messageId);
+}
+
+function markMessageAsProcessed(messageId) {
+  cleanupProcessedMessages();
+  processedMessages.set(messageId, Date.now());
+}
 
 const COMMANDS = {
   menu: ["menu", "мени"],
@@ -465,6 +487,20 @@ app.post("/webhook", async (req, res) => {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
     const message = value?.messages?.[0];
+    const messageId = message?.id;
+
+if (!message) {
+  return res.sendStatus(200);
+}
+
+if (messageId && hasProcessedMessage(messageId)) {
+  console.log("Duplicate webhook ignored:", messageId);
+  return res.sendStatus(200);
+}
+
+if (messageId) {
+  markMessageAsProcessed(messageId);
+}
 
     if (!message) {
       return res.sendStatus(200);
