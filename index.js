@@ -486,6 +486,7 @@ Rules:
 - guestType = "couple" if the message clearly mentions couple, romantic stay, honeymoon, two persons.
 - If unclear, use "unknown" and "none".
 - Do not add explanation text, only JSON.
+- Use "internal_phone" when the guest asks how to call reception, restaurant, spa, kitchen, or any hotel department from the room phone.
 
 Message: "${message}"
 `;
