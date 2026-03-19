@@ -407,20 +407,20 @@ if (isGeneralHotelQuestion(msg)) {
       : "Inquiry cancelled.\n\n" + getEnglishMenu();
   }
 
-  if (inquiry.step === "checkin") {
-    if (!isValidDateFormat(msg) || !parseDate(msg)) {
-      return language === "mk"
-        ? "Невалиден датум.\nВнесете check-in датум во формат: 10.04.2026"
-        : "Invalid date.\nPlease enter check-in date in format: 10.04.2026";
-    }
-
-    inquiry.data.checkin = msg;
-    inquiry.step = "checkout";
-
+ if (inquiry.step === "checkin") {
+  if (!isValidDateFormat(msg) || !parseDate(msg)) {
     return language === "mk"
-      ? "Внесете check-out датум.\nФормат: 12.04.2026"
-      : "Please enter your check-out date.\nFormat: 12.04.2026";
+      ? "Можете да ми напишете датум во формат: 10.04.2026 😊"
+      : "Please write the date in format: 10.04.2026 😊";
   }
+
+  inquiry.data.checkin = msg;
+  inquiry.step = "checkout";
+
+  return language === "mk"
+    ? "Одлично 😊\n\n👉 Сега напишете check-out датум (пр. 12.04.2026)"
+    : "Great 😊\n\n👉 Now please enter your check-out date (e.g. 12.04.2026)";
+}
 
   if (inquiry.step === "checkout") {
     if (!isValidDateFormat(msg) || !parseDate(msg)) {
