@@ -173,12 +173,7 @@ function detectDirectIntent(text = "", language = "en") {
     "од мојата соба",
   ];
 
-  const mkDepartmentWords = [
-    "рецепција",
-    "ресторан",
-    "спа",
-    "кујна",
-  ];
+  const mkDepartmentWords = ["рецепција", "ресторан", "спа", "базен", "кујна"];
 
   const enCallWords = [
     "call",
@@ -203,6 +198,7 @@ function detectDirectIntent(text = "", language = "en") {
     "reception",
     "restaurant",
     "spa",
+    "pool",
     "kitchen",
     "front desk",
   ];
@@ -211,7 +207,10 @@ function detectDirectIntent(text = "", language = "en") {
     (containsAny(t, mkCallWords) && containsAny(t, mkDepartmentWords)) ||
     (containsAny(t, mkRoomWords) && containsAny(t, mkDepartmentWords)) ||
     (t.includes("телефон") &&
-      (t.includes("рецепција") || t.includes("ресторан") || t.includes("спа")));
+      (t.includes("рецепција") ||
+        t.includes("ресторан") ||
+        t.includes("спа") ||
+        t.includes("базен")));
 
   const isEnInternalPhone =
     (containsAny(t, enCallWords) && containsAny(t, enDepartmentWords)) ||
@@ -228,19 +227,24 @@ function detectDirectIntent(text = "", language = "en") {
 function getDirectIntentReply(intent, language) {
   if (intent === "internal_phone") {
     return language === "mk"
-      ? "📞 Од вашата соба можете директно да се јавите:\n\n" +
-          "– Рецепција: 100\n" +
-          "– Ресторан: 200\n\n" +
-          "Доколку сакате, можеме да организираме и услуга во соба 😊"
-      : "📞 From your room, you can call directly:\n\n" +
-          "– Reception: 100\n" +
-          "– Restaurant: 200\n\n" +
-          "If you like, we can also help arrange room service 😊";
+      ? "📞 Почитувани,\n\n" +
+          "од вашата соба можете директно да се јавите:\n\n" +
+          "– Рецепција: 0\n" +
+          "– Ресторан: 501\n" +
+          "– Спа центар: 502\n" +
+          "– Базен: 503\n\n" +
+          "Доколку ви треба нешто, слободно обратете се 😊"
+      : "📞 Dear guest,\n\n" +
+          "from your room you can call directly:\n\n" +
+          "– Reception: 0\n" +
+          "– Restaurant: 501\n" +
+          "– Spa center: 502\n" +
+          "– Pool: 503\n\n" +
+          "If you need anything, feel free to contact us 😊";
   }
 
   return null;
 }
-
 // ==========================
 // INQUIRY FLOW HELPERS
 // ==========================
