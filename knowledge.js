@@ -202,40 +202,57 @@ const hotelKnowledge = {
     },
 {
   id: "internal_phone",
-
   keywordsEn: [
-    "phone",
-    "internal",
-    "call",
-    "reception",
-    "number"
+    "internal phone",
+    "internal number",
+    "from room",
+    "call from room",
+    "call reception from room",
+    "room phone",
+    "hotel phone",
+    "how to call reception",
+    "how to call restaurant",
+    "how to call spa",
+    "extension",
+    "extensions",
+    "dial reception",
+    "dial restaurant",
+    "dial spa",
+    "order from room",
+    "room service phone"
   ],
-
   keywordsMk: [
-    "телефон",
-    "внатрешен",
-    "број",
-    "рецепција",
-    "како да се јавам"
+    "внатрешен телефон",
+    "внатрешен број",
+    "од соба",
+    "како да се јавам од соба",
+    "како да ја добијам рецепција",
+    "како да се јавам на ресторан",
+    "како да се јавам на спа",
+    "телефон во соба",
+    "број од соба",
+    "локал",
+    "екстензија",
+    "како да нарачам од соба",
+    "како да се јавам на рецепција",
+    "како да се јавам на кујна"
   ],
-
   textEn:
-    "📞 Internal phone numbers (from your room):\n\n" +
+    "📞 Internal phone numbers from your room:\n\n" +
     "0 – Reception\n" +
     "501 – Restaurant\n" +
     "502 – Spa\n" +
     "503 – Pool\n" +
     "504 – Kitchen\n\n" +
-    "All numbers are available via the phone in your room.",
-
+    "Use the phone in your room and dial the number directly.",
   textMk:
-    "📞 Внатрешни телефонски броеви (од соба):\n\n" +
+    "📞 Внатрешни телефонски броеви од вашата соба:\n\n" +
     "0 – Рецепција\n" +
     "501 – Ресторан\n" +
     "502 – СПА\n" +
     "503 – Базен\n" +
     "504 – Кујна\n\n" +
-    "Сите броеви се достапни преку телефонот во вашата соба."
+    "Користете го телефонот во собата и директно внесете го бројот."
 },
     {
       id: "checkin_checkout",
