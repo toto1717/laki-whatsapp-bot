@@ -320,6 +320,23 @@ function isValidChildrenAges(value) {
     (item) => /^\d{1,2}$/.test(item) && Number(item) >= 0 && Number(item) <= 17
   );
 }
+function isGeneralHotelQuestion(text) {
+  const t = text.toLowerCase();
+
+  return [
+    "романтичен",
+    "релаксација",
+    "атмосфера",
+    "викенд",
+    "за парови",
+    "што предлагаш",
+    "кажи ми повеќе",
+    "tell me more",
+    "recommend",
+    "romantic",
+    "relax"
+  ].some(k => t.includes(k));
+}
 
 function formatChildrenValue(count, ages, language) {
   if (Number(count) === 0) {
