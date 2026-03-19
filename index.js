@@ -139,6 +139,117 @@ function getHumanFallback(language = "en") {
 }
 
 // ==========================
+// DIRECT INTENT HELPERS
+// ==========================
+function containsAny(text = "", keywords = []) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function detectDirectIntent(text = "", language = "en") {
+  const t = text.toLowerCase().trim();
+
+  const mkCallWords = [
+    "свонам",
+    "ѕвонам",
+    "јавам",
+    "се јавам",
+    "како да се јавам",
+    "како да свонам",
+    "како да ѕвонам",
+    "вртам",
+    "повикам",
+    "контактирам од соба",
+    "број",
+    "телефон",
+    "внатрешен",
+  ];
+
+  const mkRoomWords = [
+    "од соба",
+    "во соба",
+    "соба",
+    "собен телефон",
+    "телефон во соба",
+    "внатрешен телефон",
+    "од мојата соба",
+  ];
+
+  const mkDepartmentWords = [
+    "рецепција",
+    "ресторан",
+    "спа",
+    "кујна",
+  ];
+
+  const enCallWords = [
+    "call",
+    "phone",
+    "dial",
+    "reach",
+    "contact from room",
+    "how do i call",
+    "how can i call",
+    "internal",
+    "number",
+  ];
+
+  const enRoomWords = [
+    "from room",
+    "in room",
+    "room phone",
+    "internal phone",
+    "hotel phone",
+  ];
+
+  const enDepartmentWords = [
+    "reception",
+    "restaurant",
+    "spa",
+    "kitchen",
+    "front desk",
+  ];
+
+  const isMkInternalPhone =
+    (containsAny(t, mkCallWords) && containsAny(t, mkDepartmentWords)) ||
+    (containsAny(t, mkRoomWords) && containsAny(t, mkDepartmentWords)) ||
+    (t.includes("телефон") &&
+      (t.includes("рецепција") || t.includes("ресторан") || t.includes("спа")));
+
+  const isEnInternalPhone =
+    (containsAny(t, enCallWords) && containsAny(t, enDepartmentWords)) ||
+    (containsAny(t, enRoomWords) && containsAny(t, enDepartmentWords)) ||
+    (t.includes("internal") && t.includes("phone"));
+
+  if (isMkInternalPhone || isEnInternalPhone) {
+    return "internal_phone";
+  }
+
+  return null;
+}
+
+function getDirectIntentReply(intent, language) {
+  const faq = getFaqReply(intent, language);
+
+  if (faq?.text) {
+    return faq.text;
+  }
+
+  if (intent === "internal_phone") {
+    return language === "mk"
+      ? "📞 Од вашата соба можете директно да се јавите:\n\n" +
+          "– Рецепција: 100\n" +
+          "– Ресторан: 200\n\n" +
+          "Доколку сакате, можеме да организираме и услуга во соба 😊"
+      : "📞 From your room, you can call directly:\n\n" +
+          "– Reception: 100\n" +
+          "– Restaurant: 200\n\n" +
+          "If you like, we can also help arrange room service 😊";
+  }
+
+  return null;
+}
+
+// ==========================
 // INQUIRY FLOW HELPERS
 // ==========================
 function resetInquiryFlow(from) {
@@ -635,7 +746,7 @@ app.post("/webhook", async (req, res) => {
     const currentLanguage = userLanguage[from] || null;
 
     // ==========================
-    // GLOBAL COMMANDS
+    // 1. GLOBAL COMMANDS
     // ==========================
     if (matchesCommand(rawText, COMMANDS.language)) {
       delete userLanguage[from];
@@ -658,22 +769,25 @@ app.post("/webhook", async (req, res) => {
     if (matchesCommand(rawText, COMMANDS.contact)) {
       reply =
         currentLanguage === "mk"
-          ? getFaqReply("contact", "mk")?.text || hotelKnowledge.hotel.fallbackMessageMk
-          : getFaqReply("contact", "en")?.text || hotelKnowledge.hotel.fallbackMessageEn;
+          ? getFaqReply("contact", "mk")?.text ||
+            hotelKnowledge.hotel.fallbackMessageMk
+          : getFaqReply("contact", "en")?.text ||
+            hotelKnowledge.hotel.fallbackMessageEn;
 
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
     // ==========================
-    // ACTIVE INQUIRY FLOW
+    // 2. ACTIVE INQUIRY FLOW
     // ==========================
     if (userInquiryState[from]) {
       const inquiryLanguage = userInquiryState[from].language;
 
       if (matchesCommand(rawText, COMMANDS.menu)) {
         resetInquiryFlow(from);
-        reply = inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
+        reply =
+          inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
       } else {
         reply = await handleInquiryStep(from, rawText);
       }
@@ -805,7 +919,21 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ==========================
-    // FAQ MATCH FIRST
+    // 3. DIRECT INTENT CHECK (BEFORE AI)
+    // ==========================
+    const directIntent = detectDirectIntent(rawText, currentLanguage);
+
+    if (directIntent) {
+      const directReply = getDirectIntentReply(directIntent, currentLanguage);
+
+      if (directReply) {
+        await sendWhatsAppMessage(from, directReply);
+        return res.sendStatus(200);
+      }
+    }
+
+    // ==========================
+    // 4. FAQ / INTENT MATCH
     // ==========================
     const faqReply = getFaqReply(rawText, currentLanguage);
 
@@ -851,21 +979,34 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
+    if (aiIntent?.intent === "internal_phone") {
+      reply = getDirectIntentReply("internal_phone", currentLanguage);
+
+      if (reply) {
+        await sendWhatsAppMessage(from, reply);
+        return res.sendStatus(200);
+      }
+    }
+
     const faqFromIntent = getFaqReply(aiIntent?.intent, currentLanguage);
 
     if (faqFromIntent) {
-      const smartReply = buildSmartFaqReply(faqFromIntent, rawText, currentLanguage);
+      const smartReply = buildSmartFaqReply(
+        faqFromIntent,
+        rawText,
+        currentLanguage
+      );
       await sendWhatsAppMessage(from, smartReply);
       return res.sendStatus(200);
     }
 
-// ==========================
-// CONTROLLED AI REPLY
-// ==========================
-const aiReply = await getAiReply({
-  message:
-    currentLanguage === "mk"
-      ? `
+    // ==========================
+    // 5. CONTROLLED AI REPLY (LAST FALLBACK)
+    // ==========================
+    const aiReply = await getAiReply({
+      message:
+        currentLanguage === "mk"
+          ? `
 Ти си WhatsApp асистент за Laki Hotel & Spa.
 
 Одговарај како професионален хотелски рецепционер и sales асистент.
@@ -887,8 +1028,8 @@ const aiReply = await getAiReply({
 
 Прашање од гостин:
 ${rawText}
-      `
-      : `
+          `
+          : `
 You are the WhatsApp assistant for Laki Hotel & Spa.
 
 Reply like a professional hotel receptionist and sales assistant.
@@ -910,12 +1051,12 @@ Rules:
 
 Guest question:
 ${rawText}
-      `,
-  language: currentLanguage,
-  faqContext: hotelKnowledge.faq
-    .map((f) => `${f.id}: ${currentLanguage === "mk" ? f.textMk : f.textEn}`)
-    .join("\n"),
-});
+          `,
+      language: currentLanguage,
+      faqContext: hotelKnowledge.faq
+        .map((f) => `${f.id}: ${currentLanguage === "mk" ? f.textMk : f.textEn}`)
+        .join("\n"),
+    });
 
     if (aiReply) {
       await sendWhatsAppMessage(from, aiReply);
@@ -928,7 +1069,6 @@ ${rawText}
     reply = getHumanFallback(currentLanguage);
     await sendWhatsAppMessage(from, reply);
     return res.sendStatus(200);
-
   } catch (err) {
     console.error("Webhook error:", err);
     return res.sendStatus(500);
