@@ -338,6 +338,50 @@ async function handleInquiryStep(from, rawText) {
   const language = inquiry.language;
   const msg = rawText.trim();
   const lowerMsg = msg.toLowerCase();
+  // ==========================
+// 🔥 INTERRUPT LOGIC (ВАЖНО)
+// ==========================
+
+// 1. menu / jazik
+if (lowerMsg === "menu" || lowerMsg === "meni" || lowerMsg === "мени") {
+  return language === "mk" ? getMacedonianMenu() : getEnglishMenu();
+}
+
+// 2. direct intent (телефони итн)
+const directReply = detectDirectIntent(msg, language);
+if (directReply) {
+  return (
+    directReply +
+    "\n\n" +
+    (language === "mk"
+      ? "Кога ќе бидете подготвени, внесете check-in датум."
+      : "When you are ready, please enter check-in date.")
+  );
+}
+
+// 3. FAQ / knowledge
+const faqReply = getFaqReply(msg, language);
+if (faqReply) {
+  return (
+    faqReply +
+    "\n\n" +
+    (language === "mk"
+      ? "Кога ќе бидете подготвени, внесете check-in датум."
+      : "When you are ready, please enter check-in date.")
+  );
+}
+
+// 4. general hotel questions
+if (isGeneralHotelQuestion(msg)) {
+  const aiReply = await getAIReply(msg, language);
+  return (
+    aiReply +
+    "\n\n" +
+    (language === "mk"
+      ? "Ако сакате понуда, внесете check-in датум."
+      : "If you want an offer, please enter check-in date.")
+  );
+}
 
   if (matchesCommand(lowerMsg, COMMANDS.cancel)) {
     resetInquiryFlow(from);
