@@ -579,8 +579,6 @@ function shouldStartInquiryFlow(text, language) {
     t.includes("quote")
   );
 }
-  );
-}
 
 // ==========================
 // AI HELPERS
