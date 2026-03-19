@@ -158,7 +158,6 @@ function detectDirectIntent(text = "", language = "en") {
     "како да ѕвонам",
     "вртам",
     "повикам",
-    "контактирам од соба",
     "број",
     "телефон",
     "внатрешен",
@@ -186,7 +185,6 @@ function detectDirectIntent(text = "", language = "en") {
     "phone",
     "dial",
     "reach",
-    "contact from room",
     "how do i call",
     "how can i call",
     "internal",
@@ -228,12 +226,6 @@ function detectDirectIntent(text = "", language = "en") {
 }
 
 function getDirectIntentReply(intent, language) {
-  const faq = getFaqReply(intent, language);
-
-  if (faq?.text) {
-    return faq.text;
-  }
-
   if (intent === "internal_phone") {
     return language === "mk"
       ? "📞 Од вашата соба можете директно да се јавите:\n\n" +
@@ -551,7 +543,7 @@ async function handleInquiryStep(from, rawText) {
 }
 
 function shouldStartInquiryFlow(text, language) {
-  const t = text.toLowerCase();
+  const t = text.toLowerCase().trim();
 
   if (language === "mk") {
     return (
@@ -559,8 +551,14 @@ function shouldStartInquiryFlow(text, language) {
       t.includes("цена") ||
       t.includes("цени") ||
       t.includes("понуда") ||
+      t.includes("резервација") ||
+      t.includes("слободно") ||
+      t.includes("достапно") ||
       t.includes("достапност") ||
-      t.includes("резервација")
+      t.includes("колку чини") ||
+      t.includes("колку е") ||
+      t.includes("цена за") ||
+      t.includes("сакам понуда")
     );
   }
 
@@ -569,9 +567,14 @@ function shouldStartInquiryFlow(text, language) {
     t.includes("price") ||
     t.includes("prices") ||
     t.includes("offer") ||
-    t.includes("availability") ||
     t.includes("booking") ||
-    t.includes("reservation")
+    t.includes("reservation") ||
+    t.includes("availability") ||
+    t.includes("available") ||
+    t.includes("how much") ||
+    t.includes("quote")
+  );
+}
   );
 }
 
@@ -831,15 +834,6 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ==========================
-    // DIRECT OFFER FLOW TRIGGER
-    // ==========================
-    if (shouldStartInquiryFlow(rawText, currentLanguage)) {
-      reply = startInquiryFlow(from, currentLanguage);
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
-    }
-
-    // ==========================
     // MENU NUMBERS
     // ==========================
     if (currentLanguage === "en") {
@@ -946,7 +940,14 @@ app.post("/webhook", async (req, res) => {
       await sendWhatsAppMessage(from, finalReply);
       return res.sendStatus(200);
     }
-
+    // ==========================
+    // DIRECT OFFER FLOW TRIGGER
+    // ==========================
+    if (shouldStartInquiryFlow(rawText, currentLanguage)) {
+      reply = startInquiryFlow(from, currentLanguage);
+      await sendWhatsAppMessage(from, reply);
+      return res.sendStatus(200);
+    }
     // ==========================
     // AI INTENT
     // ==========================
