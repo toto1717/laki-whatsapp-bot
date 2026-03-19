@@ -474,7 +474,7 @@ You are a hotel intent classifier.
 
 Return ONLY valid JSON in this format:
 {
-  "intent": "spa | restaurant | parking | location | contact | rooms | offer | checkin_checkout | children_policy | baby_crib | unknown",
+  "intent": "spa | restaurant | parking | location | contact | rooms | offer | checkin_checkout | children_policy | baby_crib | internal_phone | unknown",
   "guestType": "family | couple | none",
   "needsInquiry": true,
   "confidence": 0.95
