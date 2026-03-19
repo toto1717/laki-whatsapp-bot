@@ -844,24 +844,29 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // 2. ACTIVE INQUIRY FLOW
-    // ==========================
-    if (userInquiryState[from]) {
-      const inquiryLanguage = userInquiryState[from].language;
+ // ==========================
+// 2. ACTIVE INQUIRY FLOW
+// ==========================
+if (userInquiryState[from]) {
 
-      if (matchesCommand(rawText, COMMANDS.menu)) {
-        resetInquiryFlow(from);
-        reply =
-          inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
-      } else {
-        reply = await handleInquiryStep(from, rawText);
-      }
+  if (isGeneralQuestion(rawText)) {
+    userInquiryState[from] = null;
+  } else {
 
-      await sendWhatsAppMessage(from, reply);
-      return res.sendStatus(200);
+    const inquiryLanguage = userInquiryState[from].language;
+
+    if (matchesCommand(rawText, COMMANDS.menu)) {
+      resetInquiryFlow(from);
+      reply =
+        inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
+    } else {
+      reply = await handleInquiryStep(from, rawText);
     }
 
+    await sendWhatsAppMessage(from, reply);
+    return res.sendStatus(200);
+  }
+}
     // ==========================
     // LANGUAGE SELECTION
     // ==========================
