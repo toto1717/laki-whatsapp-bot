@@ -365,15 +365,19 @@ if (lowerMsg === "menu" || lowerMsg === "meni" || lowerMsg === "мени") {
 }
 
 // 2. direct intent (телефони итн)
-const directReply = detectDirectIntent(msg, language);
-if (directReply) {
-  return (
-    directReply +
-    "\n\n" +
-    (language === "mk"
-      ? "Кога ќе бидете подготвени, внесете check-in датум."
-      : "When you are ready, please enter check-in date.")
-  );
+const directIntent = detectDirectIntent(msg, language);
+if (directIntent) {
+  const directReply = getDirectIntentReply(directIntent, language);
+
+  if (directReply) {
+    return (
+      directReply +
+      "\n\n" +
+      (language === "mk"
+        ? "Кога ќе бидете подготвени, внесете check-in датум."
+        : "When you are ready, please enter check-in date.")
+    );
+  }
 }
 
 // 3. FAQ / knowledge
@@ -390,7 +394,14 @@ if (faqReply) {
 
 // 4. general hotel questions
 if (isGeneralHotelQuestion(msg)) {
-  const aiReply = await getAIReply(msg, language);
+  const aiReply = await getAiReply({
+    message: msg,
+    language,
+    faqContext: hotelKnowledge.faq
+      .map((f) => `${f.id}: ${language === "mk" ? f.textMk : f.textEn}`)
+      .join("\n"),
+  });
+
   return (
     aiReply +
     "\n\n" +
