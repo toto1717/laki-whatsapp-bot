@@ -246,40 +246,41 @@ const hotelKnowledge = {
         "Се работи за надворешен паркинг во дворот на хотелот и е под видео надзор.",
     },
 
-    {
-      id: "location",
-      keywordsEn: [
-        "location",
-        "address",
-        "map",
-        "where",
-        "near",
-        "airport",
-        "beach",
-      ],
-      keywordsMk: [
-        "локација",
-        "адреса",
-        "мапа",
-        "каде",
-        "блиску",
-        "аеродром",
-        "плажа",
-      ],
-      textEn:
-        "Laki Hotel & Spa is located in Ohrid.\n" +
-        "- About 15 km from Ohrid Airport\n" +
-        "- Close to the beach\n" +
-        "- Around 8 km from the city attractions and Port Ohrid\n\n" +
-        `Google Maps:\n${hotelKnowledge?.hotel?.mapsUrl || "https://www.google.com/maps"}`,
-      textMk:
-        "Laki Hotel & Spa се наоѓа во Охрид.\n" +
-        "- Околу 15 km од Охридскиот аеродром\n" +
-        "- Во близина има плажа\n" +
-        "- Околу 8 km од градските знаменитости и Порт Охрид\n\n" +
-        `Google Maps:\n${hotelKnowledge?.hotel?.mapsUrl || "https://www.google.com/maps"}`,
-    },
-
+   {
+  id: "location",
+  keywordsEn: [
+    "location",
+    "address",
+    "map",
+    "where",
+    "near",
+    "airport",
+    "beach",
+  ],
+  keywordsMk: [
+    "локација",
+    "адреса",
+    "мапа",
+    "каде",
+    "блиску",
+    "аеродром",
+    "плажа",
+  ],
+  textEn:
+    "Laki Hotel & Spa is located in Ohrid.\n" +
+    "- About 15 km from Ohrid Airport\n" +
+    "- Close to the beach\n" +
+    "- Around 8 km from the city attractions and Port Ohrid\n\n" +
+    "Google Maps:\n" +
+    "https://www.google.com/maps/place/Hotel+%26+Spa+%E2%80%9ELaki%E2%80%9C/@41.068414,20.7991041,827m/data=!3m1!1e3!4m11!3m10!1s0x1350c37c9dd4da75:0xeb369b8ad996df4f!5m4!1s2026-04-04!2i4!4m1!1i2!8m2!3d41.068414!4d20.801679!16s%2Fg%2F11ddxpfd7j?entry=ttu&g_ep=EgoyMDI2MDMxNS4wIKXMDSoASAFQAw%3D%3D",
+  textMk:
+    "Laki Hotel & Spa се наоѓа во Охрид.\n" +
+    "- Околу 15 km од Охридскиот аеродром\n" +
+    "- Во близина има плажа\n" +
+    "- Околу 8 km од градските знаменитости и Порт Охрид\n\n" +
+    "Google Maps:\n" +
+    "https://www.google.com/maps/place/Hotel+%26+Spa+%E2%80%9ELaki%E2%80%9C/@41.068414,20.7991041,827m/data=!3m1!1e3!4m11!3m10!1s0x1350c37c9dd4da75:0xeb369b8ad996df4f!5m4!1s2026-04-04!2i4!4m1!1i2!8m2!3d41.068414!4d20.801679!16s%2Fg%2F11ddxpfd7j?entry=ttu&g_ep=EgoyMDI2MDMxNS4wIKXMDSoASAFQAw%3D%3D",
+},
     {
       id: "contact",
       keywordsEn: ["contact", "phone", "email", "call", "number", "reception"],
