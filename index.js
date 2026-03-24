@@ -861,7 +861,8 @@ app.post("/webhook", async (req, res) => {
 if (userInquiryState[from]) {
 
   if (isGeneralQuestion(rawText)) {
-    userInquiryState[from] = null;
+    resetInquiryFlow(from);
+
   } else {
 
     const inquiryLanguage = userInquiryState[from].language;
@@ -874,7 +875,10 @@ if (userInquiryState[from]) {
       reply = await handleInquiryStep(from, rawText);
     }
 
-    await sendWhatsAppMessage(from, reply);
+    if (reply) {
+      await sendWhatsAppMessage(from, reply);
+    }
+
     return res.sendStatus(200);
   }
 }
