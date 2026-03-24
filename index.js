@@ -424,16 +424,16 @@ async function handleInquiryStep(from, rawText) {
     }
   }
 
-  const faqReply = getFaqReply(msg, language);
-  if (faqReply) {
-    return (
-      faqReply +
-      "\n\n" +
-      (language === "mk"
-        ? "Кога ќе бидете подготвени, внесете check-in датум."
-        : "When you are ready, please enter check-in date.")
-    );
-  }
+  cconst faqReply = getFaqReply(msg, language);
+if (faqReply) {
+  return (
+    faqReply.text +
+    "\n\n" +
+    (language === "mk"
+      ? "Кога ќе бидете подготвени, внесете check-in датум."
+      : "When you are ready, please enter check-in date.")
+  );
+}
 
   if (isGeneralHotelQuestion(msg) && !isExplicitOfferRequest(msg, language)) {
     const aiReply = await getAiReply({
