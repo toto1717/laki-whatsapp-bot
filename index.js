@@ -210,7 +210,8 @@ function detectDirectIntent(text = "", language = "en") {
       (t.includes("рецепција") ||
         t.includes("ресторан") ||
         t.includes("спа") ||
-        t.includes("базен")));
+        t.includes("базен") ||
+        t.includes("кујна")));
 
   const isEnInternalPhone =
     (containsAny(t, enCallWords) && containsAny(t, enDepartmentWords)) ||
@@ -232,14 +233,16 @@ function getDirectIntentReply(intent, language) {
           "– Рецепција: 0\n" +
           "– Ресторан: 501\n" +
           "– Спа центар: 502\n" +
-          "– Базен: 503\n\n" +
+          "– Базен: 503\n" +
+          "– Кујна: 504\n\n" +
           "Доколку ви треба нешто, слободно обратете се 😊"
       : "📞 Dear guest,\n\n" +
           "from your room you can call directly:\n\n" +
           "– Reception: 0\n" +
           "– Restaurant: 501\n" +
           "– Spa center: 502\n" +
-          "– Pool: 503\n\n" +
+          "– Pool: 503\n" +
+          "– Kitchen: 504\n\n" +
           "If you need anything, feel free to contact us 😊";
   }
 
@@ -424,16 +427,16 @@ async function handleInquiryStep(from, rawText) {
     }
   }
 
-  cconst faqReply = getFaqReply(msg, language);
-if (faqReply) {
-  return (
-    faqReply.text +
-    "\n\n" +
-    (language === "mk"
-      ? "Кога ќе бидете подготвени, внесете check-in датум."
-      : "When you are ready, please enter check-in date.")
-  );
-}
+  const faqReply = getFaqReply(msg, language);
+  if (faqReply) {
+    return (
+      faqReply.text +
+      "\n\n" +
+      (language === "mk"
+        ? "Кога ќе бидете подготвени, внесете check-in датум."
+        : "When you are ready, please enter check-in date.")
+    );
+  }
 
   if (isGeneralHotelQuestion(msg) && !isExplicitOfferRequest(msg, language)) {
     const aiReply = await getAiReply({
@@ -843,9 +846,6 @@ app.post("/webhook", async (req, res) => {
     let reply = "";
     const currentLanguage = userLanguage[from] || null;
 
-    // ==========================
-    // 1. GLOBAL COMMANDS
-    // ==========================
     if (matchesCommand(rawText, COMMANDS.language)) {
       delete userLanguage[from];
       resetInquiryFlow(from);
@@ -876,9 +876,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // 2. ACTIVE INQUIRY FLOW
-    // ==========================
     if (userInquiryState[from]) {
       const inquiryLanguage = userInquiryState[from].language;
 
@@ -903,9 +900,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // LANGUAGE SELECTION
-    // ==========================
     if (!currentLanguage) {
       if (text === "1" || text === "english" || text === "en") {
         userLanguage[from] = "en";
@@ -921,9 +915,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // MENU / CANCEL
-    // ==========================
     if (matchesCommand(rawText, COMMANDS.menu)) {
       reply = currentLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
       await sendWhatsAppMessage(from, reply);
@@ -937,9 +928,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // MENU NUMBERS
-    // ==========================
     if (currentLanguage === "en") {
       if (text === "2") {
         reply = getFaqReply("rooms", "en")?.text || getHumanFallback("en");
@@ -1016,9 +1004,6 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // ==========================
-    // 3. DIRECT INTENT CHECK (BEFORE AI)
-    // ==========================
     const directIntent = detectDirectIntent(rawText, currentLanguage);
 
     if (directIntent) {
@@ -1030,9 +1015,6 @@ app.post("/webhook", async (req, res) => {
       }
     }
 
-    // ==========================
-    // 4. FAQ / INTENT MATCH
-    // ==========================
     const faqReply = getFaqReply(rawText, currentLanguage);
 
     if (faqReply) {
@@ -1045,18 +1027,12 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // DIRECT OFFER FLOW TRIGGER
-    // ==========================
     if (shouldStartInquiryFlow(rawText, currentLanguage)) {
       reply = startInquiryFlow(from, currentLanguage);
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // AI INTENT
-    // ==========================
     const aiIntent = await detectIntentWithAI(rawText, currentLanguage);
     console.log("AI INTENT:", aiIntent);
 
@@ -1110,9 +1086,6 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // 5. CONTROLLED AI REPLY (LAST FALLBACK)
-    // ==========================
     const aiReply = await getAiReply({
       message:
         currentLanguage === "mk"
@@ -1173,9 +1146,6 @@ ${rawText}
       return res.sendStatus(200);
     }
 
-    // ==========================
-    // HUMAN FALLBACK
-    // ==========================
     reply = getHumanFallback(currentLanguage);
     await sendWhatsAppMessage(from, reply);
     return res.sendStatus(200);
