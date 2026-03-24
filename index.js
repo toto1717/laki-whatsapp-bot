@@ -245,6 +245,7 @@ function getDirectIntentReply(intent, language) {
 
   return null;
 }
+
 // ==========================
 // INQUIRY FLOW HELPERS
 // ==========================
@@ -320,6 +321,46 @@ function isValidChildrenAges(value) {
     (item) => /^\d{1,2}$/.test(item) && Number(item) >= 0 && Number(item) <= 17
   );
 }
+
+function isExplicitOfferRequest(text, language) {
+  const t = text.toLowerCase().trim();
+
+  if (language === "mk") {
+    return (
+      t.includes("цена") ||
+      t.includes("цени") ||
+      t.includes("понуда") ||
+      t.includes("резервација") ||
+      t.includes("слободно") ||
+      t.includes("достапно") ||
+      t.includes("достапност") ||
+      t.includes("колку чини") ||
+      t.includes("колку е") ||
+      t.includes("цена за") ||
+      t.includes("сакам понуда") ||
+      t.includes("сакам резервација") ||
+      t.includes("сакам да резервирам") ||
+      t.includes("имате слободно") ||
+      t.includes("пратете понуда")
+    );
+  }
+
+  return (
+    t.includes("price") ||
+    t.includes("prices") ||
+    t.includes("offer") ||
+    t.includes("booking") ||
+    t.includes("reservation") ||
+    t.includes("availability") ||
+    t.includes("available") ||
+    t.includes("how much") ||
+    t.includes("quote") ||
+    t.includes("book now") ||
+    t.includes("i want to book") ||
+    t.includes("send me an offer")
+  );
+}
+
 function isGeneralHotelQuestion(text) {
   const t = text.toLowerCase();
 
@@ -331,11 +372,19 @@ function isGeneralHotelQuestion(text) {
     "за парови",
     "што предлагаш",
     "кажи ми повеќе",
+    "кажи нешто повеќе",
+    "ме интересира",
+    "се за хотелот",
+    "што нудите",
+    "какви услуги имате",
     "tell me more",
     "recommend",
     "romantic",
-    "relax"
-  ].some(k => t.includes(k));
+    "relax",
+    "what do you offer",
+    "interested in the hotel",
+    "more about the hotel",
+  ].some((k) => t.includes(k));
 }
 
 function formatChildrenValue(count, ages, language) {
@@ -355,61 +404,54 @@ async function handleInquiryStep(from, rawText) {
   const language = inquiry.language;
   const msg = rawText.trim();
   const lowerMsg = msg.toLowerCase();
-  // ==========================
-// 🔥 INTERRUPT LOGIC (ВАЖНО)
-// ==========================
 
-// 1. menu / jazik
-if (lowerMsg === "menu" || lowerMsg === "meni" || lowerMsg === "мени") {
-  return language === "mk" ? getMacedonianMenu() : getEnglishMenu();
-}
+  if (lowerMsg === "menu" || lowerMsg === "meni" || lowerMsg === "мени") {
+    return language === "mk" ? getMacedonianMenu() : getEnglishMenu();
+  }
 
-// 2. direct intent (телефони итн)
-const directIntent = detectDirectIntent(msg, language);
-if (directIntent) {
-  const directReply = getDirectIntentReply(directIntent, language);
+  const directIntent = detectDirectIntent(msg, language);
+  if (directIntent) {
+    const directReply = getDirectIntentReply(directIntent, language);
 
-  if (directReply) {
+    if (directReply) {
+      return (
+        directReply +
+        "\n\n" +
+        (language === "mk"
+          ? "Кога ќе бидете подготвени, внесете check-in датум."
+          : "When you are ready, please enter check-in date.")
+      );
+    }
+  }
+
+  const faqReply = getFaqReply(msg, language);
+  if (faqReply) {
     return (
-      directReply +
+      faqReply +
       "\n\n" +
       (language === "mk"
         ? "Кога ќе бидете подготвени, внесете check-in датум."
         : "When you are ready, please enter check-in date.")
     );
   }
-}
 
-// 3. FAQ / knowledge
-const faqReply = getFaqReply(msg, language);
-if (faqReply) {
-  return (
-    faqReply +
-    "\n\n" +
-    (language === "mk"
-      ? "Кога ќе бидете подготвени, внесете check-in датум."
-      : "When you are ready, please enter check-in date.")
-  );
-}
+  if (isGeneralHotelQuestion(msg) && !isExplicitOfferRequest(msg, language)) {
+    const aiReply = await getAiReply({
+      message: msg,
+      language,
+      faqContext: hotelKnowledge.faq
+        .map((f) => `${f.id}: ${language === "mk" ? f.textMk : f.textEn}`)
+        .join("\n"),
+    });
 
-// 4. general hotel questions
-if (isGeneralHotelQuestion(msg)) {
-  const aiReply = await getAiReply({
-    message: msg,
-    language,
-    faqContext: hotelKnowledge.faq
-      .map((f) => `${f.id}: ${language === "mk" ? f.textMk : f.textEn}`)
-      .join("\n"),
-  });
-
-  return (
-    aiReply +
-    "\n\n" +
-    (language === "mk"
-      ? "Ако сакате понуда, внесете check-in датум."
-      : "If you want an offer, please enter check-in date.")
-  );
-}
+    return (
+      aiReply +
+      "\n\n" +
+      (language === "mk"
+        ? "Ако сакате понуда, само напишете: сакам понуда."
+        : "If you want an offer, just type: I want an offer.")
+    );
+  }
 
   if (matchesCommand(lowerMsg, COMMANDS.cancel)) {
     resetInquiryFlow(from);
@@ -418,20 +460,20 @@ if (isGeneralHotelQuestion(msg)) {
       : "Inquiry cancelled.\n\n" + getEnglishMenu();
   }
 
- if (inquiry.step === "checkin") {
-  if (!isValidDateFormat(msg) || !parseDate(msg)) {
+  if (inquiry.step === "checkin") {
+    if (!isValidDateFormat(msg) || !parseDate(msg)) {
+      return language === "mk"
+        ? "Можете да ми напишете датум во формат: 10.04.2026 😊"
+        : "Please write the date in format: 10.04.2026 😊";
+    }
+
+    inquiry.data.checkin = msg;
+    inquiry.step = "checkout";
+
     return language === "mk"
-      ? "Можете да ми напишете датум во формат: 10.04.2026 😊"
-      : "Please write the date in format: 10.04.2026 😊";
+      ? "Одлично 😊\n\n👉 Сега напишете check-out датум (пр. 12.04.2026)"
+      : "Great 😊\n\n👉 Now please enter your check-out date (e.g. 12.04.2026)";
   }
-
-  inquiry.data.checkin = msg;
-  inquiry.step = "checkout";
-
-  return language === "mk"
-    ? "Одлично 😊\n\n👉 Сега напишете check-out датум (пр. 12.04.2026)"
-    : "Great 😊\n\n👉 Now please enter your check-out date (e.g. 12.04.2026)";
-}
 
   if (inquiry.step === "checkout") {
     if (!isValidDateFormat(msg) || !parseDate(msg)) {
@@ -563,7 +605,9 @@ if (isGeneralHotelQuestion(msg)) {
     let emailSent = true;
 
     try {
+      console.log("Sending inquiry email:", emailPayload);
       await sendInquiryEmail(emailPayload);
+      console.log("Inquiry email sent successfully");
     } catch (emailError) {
       emailSent = false;
       console.error("Email send error:", emailError.message || emailError);
@@ -621,35 +665,9 @@ if (isGeneralHotelQuestion(msg)) {
 function shouldStartInquiryFlow(text, language) {
   const t = text.toLowerCase().trim();
 
-  if (language === "mk") {
-    return (
-      t === "1" ||
-      t.includes("цена") ||
-      t.includes("цени") ||
-      t.includes("понуда") ||
-      t.includes("резервација") ||
-      t.includes("слободно") ||
-      t.includes("достапно") ||
-      t.includes("достапност") ||
-      t.includes("колку чини") ||
-      t.includes("колку е") ||
-      t.includes("цена за") ||
-      t.includes("сакам понуда")
-    );
-  }
+  if (t === "1") return true;
 
-  return (
-    t === "1" ||
-    t.includes("price") ||
-    t.includes("prices") ||
-    t.includes("offer") ||
-    t.includes("booking") ||
-    t.includes("reservation") ||
-    t.includes("availability") ||
-    t.includes("available") ||
-    t.includes("how much") ||
-    t.includes("quote")
-  );
+  return isExplicitOfferRequest(t, language);
 }
 
 // ==========================
@@ -669,7 +687,10 @@ Return ONLY valid JSON in this format:
 }
 
 Rules:
-- Use "offer" when the guest asks about price, booking, reservation, availability, best offer, rate, rates, cost, quote.
+- Use "offer" ONLY when the guest EXPLICITLY asks about price, rates, booking, reservation, availability, cost, quote, or sending an offer.
+- If the guest is only asking generally about the hotel, services, rooms, spa, restaurant, or says things like "tell me more", "what do you offer", "I am interested in the hotel", DO NOT use "offer".
+- In such cases use the closest intent like "rooms", "spa", "restaurant", or "unknown".
+- Set "needsInquiry" to true ONLY for explicit booking / price / availability requests.
 - guestType = "family" if the message clearly mentions family, kids, children, baby.
 - guestType = "couple" if the message clearly mentions couple, romantic stay, honeymoon, two persons.
 - If unclear, use "unknown" and "none".
@@ -855,32 +876,33 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
- // ==========================
-// 2. ACTIVE INQUIRY FLOW
-// ==========================
-if (userInquiryState[from]) {
-  const inquiryLanguage = userInquiryState[from].language;
+    // ==========================
+    // 2. ACTIVE INQUIRY FLOW
+    // ==========================
+    if (userInquiryState[from]) {
+      const inquiryLanguage = userInquiryState[from].language;
 
-  if (matchesCommand(rawText, COMMANDS.menu)) {
-    resetInquiryFlow(from);
-    reply =
-      inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
+      if (matchesCommand(rawText, COMMANDS.menu)) {
+        resetInquiryFlow(from);
+        reply =
+          inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
 
-    if (reply) {
-      await sendWhatsAppMessage(from, reply);
+        if (reply) {
+          await sendWhatsAppMessage(from, reply);
+        }
+
+        return res.sendStatus(200);
+      }
+
+      reply = await handleInquiryStep(from, rawText);
+
+      if (reply) {
+        await sendWhatsAppMessage(from, reply);
+      }
+
+      return res.sendStatus(200);
     }
 
-    return res.sendStatus(200);
-  }
-
-  reply = await handleInquiryStep(from, rawText);
-
-  if (reply) {
-    await sendWhatsAppMessage(from, reply);
-  }
-
-  return res.sendStatus(200);
-}
     // ==========================
     // LANGUAGE SELECTION
     // ==========================
@@ -1022,6 +1044,7 @@ if (userInquiryState[from]) {
       await sendWhatsAppMessage(from, finalReply);
       return res.sendStatus(200);
     }
+
     // ==========================
     // DIRECT OFFER FLOW TRIGGER
     // ==========================
@@ -1030,13 +1053,17 @@ if (userInquiryState[from]) {
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
     }
+
     // ==========================
     // AI INTENT
     // ==========================
     const aiIntent = await detectIntentWithAI(rawText, currentLanguage);
     console.log("AI INTENT:", aiIntent);
 
-    if (aiIntent?.needsInquiry || aiIntent?.intent === "offer") {
+    if (
+      (aiIntent?.needsInquiry || aiIntent?.intent === "offer") &&
+      isExplicitOfferRequest(rawText, currentLanguage)
+    ) {
       reply = startInquiryFlow(from, currentLanguage);
       await sendWhatsAppMessage(from, reply);
       return res.sendStatus(200);
