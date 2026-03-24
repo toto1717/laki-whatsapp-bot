@@ -859,21 +859,12 @@ app.post("/webhook", async (req, res) => {
 // 2. ACTIVE INQUIRY FLOW
 // ==========================
 if (userInquiryState[from]) {
+  const inquiryLanguage = userInquiryState[from].language;
 
-  if (isGeneralQuestion(rawText)) {
+  if (matchesCommand(rawText, COMMANDS.menu)) {
     resetInquiryFlow(from);
-
-  } else {
-
-    const inquiryLanguage = userInquiryState[from].language;
-
-    if (matchesCommand(rawText, COMMANDS.menu)) {
-      resetInquiryFlow(from);
-      reply =
-        inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
-    } else {
-      reply = await handleInquiryStep(from, rawText);
-    }
+    reply =
+      inquiryLanguage === "mk" ? getMacedonianMenu() : getEnglishMenu();
 
     if (reply) {
       await sendWhatsAppMessage(from, reply);
@@ -881,6 +872,14 @@ if (userInquiryState[from]) {
 
     return res.sendStatus(200);
   }
+
+  reply = await handleInquiryStep(from, rawText);
+
+  if (reply) {
+    await sendWhatsAppMessage(from, reply);
+  }
+
+  return res.sendStatus(200);
 }
     // ==========================
     // LANGUAGE SELECTION
