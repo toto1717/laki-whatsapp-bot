@@ -9,6 +9,7 @@ export async function sendInquiryEmail(inquiry) {
     checkout,
     adults,
     children,
+    childrenAges,
     name,
     email,
     specialRequest,
@@ -21,6 +22,7 @@ export async function sendInquiryEmail(inquiry) {
     `Check-out: ${checkout}\n` +
     `Adults: ${adults}\n` +
     `Children: ${children}\n` +
+    `Children ages: ${childrenAges || "Not provided"}\n` +
     `Name: ${name}\n` +
     `Email: ${email}\n` +
     `Special request: ${specialRequest || "None"}\n`;
@@ -29,12 +31,13 @@ export async function sendInquiryEmail(inquiry) {
     const response = await resend.emails.send({
       from: "Laki Hotel <onboarding@resend.dev>",
       to: [process.env.MAIL_TO],
-      reply_to: email, // 🔥 ОВА Е КЛУЧНО
+      reply_to: email,
       subject: `New hotel inquiry - ${name}`,
       text,
     });
 
     console.log("EMAIL SENT VIA RESEND:", response);
+    return response;
   } catch (err) {
     console.error("RESEND ERROR:", err);
     throw err;
